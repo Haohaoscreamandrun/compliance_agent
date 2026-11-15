@@ -1,0 +1,119 @@
+# =============================================================================
+# Compliance Agent — Public Repository .gitignore
+# Ordering Rule:
+#   1. Build/runtime directories & confidential document extensions
+#   2. Explicit allowlists (!) for synthetic test fixtures, .gitkeep, & UI assets
+#   3. Secrets, credentials, and OS/IDE exclusions LAST (so ! never overrides them)
+# =============================================================================
+
+# =============================================================================
+# 1. Anchored Runtime Storage & Local Data Directories
+# (Anchored to repo root or /backend so source packages like app/data are safe)
+# =============================================================================
+/storage/*
+!/storage/.gitkeep
+/secrets/*
+!/secrets/.gitkeep
+/uploads/
+/pgdata/
+/data/
+/samples/
+/backend/storage/
+/backend/uploads/
+
+# =============================================================================
+# 2. Confidential Regulatory Documents & Archives (Case-Insensitive Extensions)
+# Prevents accidental commits of real certificates, MSDSs, 公文, or label scans
+# =============================================================================
+*.[pP][dD][fF]
+*.[wW][eE][bB][pP]
+*.[pP][nN][gG]
+*.[jJ][pP][gG]
+*.[jJ][pP][eE][gG]
+*.[tT][iI][fF]
+*.[tT][iI][fF][fF]
+*.[xX][lL][sS]
+*.[xX][lL][sS][xX]
+*.[dD][oO][cC]
+*.[dD][oO][cC][xX]
+*.[cC][sS][vV]
+# Taiwan Government Official Document (公文 / ODF / 電子公文交換) & Archive Formats
+*.[oO][dD][tT]
+*.[oO][dD][sS]
+*.[dD][iI]
+*.[zZ][iI][pP]
+*.[7][zZ]
+*.[rR][aA][rR]
+
+# Allow synthetic public test fixtures & static UI/documentation assets
+!backend/tests/fixtures/**
+!frontend/src/assets/**
+!frontend/public/**
+!docs/assets/**
+
+# =============================================================================
+# 3. Python / FastAPI Backend Build & Cache Artifacts
+# =============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+/.venv/
+/venv/
+/backend/.venv/
+/backend/venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+/dist/
+/build/
+/backend/dist/
+/backend/build/
+*.egg-info/
+*.db
+*.sqlite
+*.sqlite3
+
+# =============================================================================
+# 4. Angular / Node Frontend Build & Cache Artifacts
+# =============================================================================
+node_modules/
+.angular/
+/frontend/dist/
+/frontend/.angular/
+/frontend/coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =============================================================================
+# 5. Secrets, Credentials & OS/IDE Files (MUST REMAIN AT END OF FILE)
+# Placing these after all `!` negations guarantees secrets or OS junk placed
+# inside `backend/tests/fixtures/` or `assets/` can NEVER be force-tracked.
+# =============================================================================
+.env
+.env.*
+*.env
+
+# Cloud / GCP / TLS Keys (store any local GCP service account JSON in /secrets/)
+*service-account*.json
+*credentials*.json
+application_default_credentials.json
+*.gcp.json
+.gcloud/
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+
+# IDE, OS & Agent Scratch
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+/graphify-out/
