@@ -1,0 +1,97 @@
+# cSpell:words pgdata healthcheck isready initdb healthz urllib urlopen
+# =============================================================================
+# Compliance Agent — Docker Compose Service Topology
+# Usage:
+#   1. Ensure .env has GEMINI_API_KEY and POSTGRES_PASSWORD set
+#   2. docker compose up --build
+# =============================================================================
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: compliance_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER:?Set POSTGRES_USER in .env}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set a strong POSTGRES_PASSWORD in .env}"
+      POSTGRES_DB: "${POSTGRES_DB:?Set POSTGRES_DB in .env}"
+    ports:
+      # Bind strictly to loopback (127.0.0.1) so Postgres is never exposed on 0.0.0.0
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - db_internal_net
+    healthcheck:
+      # Use -h 127.0.0.1 so pg_isready waits for TCP port 5432 (not the temporary initdb Unix socket)
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: compliance_backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Override host-CLI defaults from .env so container networking works seamlessly
+      POSTGRES_HOST: "db"
+      POSTGRES_PORT: "5432"
+      BACKEND_HOST: "0.0.0.0"
+      BACKEND_PORT: "8000"
+      STORAGE_DIR: "/app/storage"
+      SECRETS_DIR: "/app/secrets"
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ./storage:/app/storage
+      - ./secrets:/app/secrets:ro
+    networks:
+      - db_internal_net
+      - app_net
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: compliance_frontend
+    restart: unless-stopped
+    # Nginx serves Angular on container port 80 and reverse-proxies /api/* to http://backend:8000
+    # over app_net, avoiding host-port/CORS coupling when FRONTEND_PORT or BACKEND_PORT is changed.
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-4200}:80"
+    networks:
+      - app_net
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:80/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+networks:
+  db_internal_net:
+    driver: bridge
+    internal: true
+  app_net:
+    driver: bridge
+
+volumes:
+  pgdata:
