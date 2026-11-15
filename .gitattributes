@@ -1,0 +1,10 @@
+# Enforce LF line endings across platforms so Dockerfiles, .env templates,
+# and container scripts never break with CRLF (\r\n) on Windows checkouts.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
