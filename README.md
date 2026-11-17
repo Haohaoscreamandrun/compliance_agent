@@ -76,9 +76,9 @@ compliance_agent/
         ├── models/                 # TypeScript interfaces mirroring backend Pydantic schemas
         ├── services/               # HttpClient service for FastAPI endpoints
         └── components/
-            ├── registry-toolbar/   # Permit selector (許可證字號) & on-demand MOA EIR027 sync trigger
+            ├── registry-toolbar/   # Permit selector (許可證字號) & on-demand MOA EIR027 lookup
             ├── copilot-audit-panel/# Section 1 (Document Evidence chips) & Section 2 (MatTable Checklist)
-            └── bbox-canvas-viewer/ # HTML5 <canvas> overlay rendering [ymin, xmin, ymax, xmax] (0–1000) boxes
+            └── bbox-svg-viewer/    # Inline <svg viewBox="0 0 1000 1000"> overlay rendering [ymin, xmin, ymax, xmax] boxes
 ```
 
 ### 2. Core Pipeline & Tooling
@@ -110,7 +110,7 @@ compliance_agent/
 | **Document Parsing & BBoxes** | **Unified `PyMuPDF` + `Pillow` + `Gemini Flash / Flash-Lite`** (`response_schema` + native `box_2d` `[0–1000]`) | **IBM Docling**, **Mistral OCR**, **DocLayout-YOLO**, **RapidOCR**, **MinerU**, **Marker** | Eliminates coordinate-system mismatches across multiple OCR engines and multi-GB local model weights. Native VLM constrained decoding handles Taiwan 公文 red seals, ROC dates (`民國年`), and visual `GHS01–GHS09` hazard pictograms in one pass. |
 | **Gov Registry Ingestion** | **On-Call `httpx` Lookup + Official MOA `EIR027` OpenData API** (with PostgreSQL snapshot cache) | **`Crawl4AI` / `Playwright`** scraping; Bulk weekly background cron jobs (`APScheduler`) | `MOAOPD-API-EIR027` natively supports `$filter` and 4 JSON sub-endpoints (`PesticideDetail`, `PesticideLicImage`, `PesticideBrcode`, `PesticideGropty`), so fetching only the target permit on-call takes `<1s` and eliminates background schedulers and headless browsers. |
 | **Prompt & Output Control** | **`GroundedField[T]` Chain-of-Grounding** + **Two-Phase Copilot** | Single-turn `tools` + `response_schema`; Raw PDF binary dumps; Free-text Markdown tables | Autoregressive field ordering (`verbatim_text` → `value` → `page` → `box_2d`) grounds bounding boxes to transcribed tokens. Separating Phase 1 (Tools) from Phase 2 (Constrained JSON) avoids Gemini API tool/schema conflicts. |
-| **Frontend UI** | **Angular 19 + Angular Material** + HTML5 `<canvas>` overlay | **React / Next.js**, **Streamlit**, **Gradio** | Clicking a `[doc_id, page, box_2d]` citation in `MatTable` redraws the `<canvas>` highlight overlay in `<5ms` via Angular Signals without full-page reloads. |
+| **Frontend UI** | **Angular 19 + Angular Material** + Inline `<svg viewBox="0 0 1000 1000">` overlay | Raw HTML5 `<canvas>` pixel math, **React / Next.js**, **Streamlit**, **Gradio** | Maps Gemini's `0–1000` `box_2d` coordinates 1:1 in vector SVG without JS resize/DPI math or volatile `canvas-html` features, with `fetchpriority="high"`, `@container` queries, and WCAG 2.1 AA bilingual (`zh-Hant`/`en`) accessibility. |
 
 ---
 

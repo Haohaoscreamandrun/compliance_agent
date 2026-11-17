@@ -71,7 +71,7 @@ services:
     container_name: compliance_frontend
     restart: unless-stopped
     # Nginx serves Angular on container port 80 and reverse-proxies /api/* to http://backend:8000
-    # over app_net, avoiding host-port/CORS coupling when FRONTEND_PORT or BACKEND_PORT is changed.
+    # over app_net (with client_max_body_size 25m and proxy_read_timeout 120s), avoiding host-port/CORS coupling.
     ports:
       - "127.0.0.1:${FRONTEND_PORT:-4200}:80"
     networks:
