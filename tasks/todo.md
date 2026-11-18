@@ -12,7 +12,7 @@
 
 - [x] **CL 2.0 (`chore(backend-scaffold)`):** Isolate backend packaging & container scaffold (`backend/pyproject.toml`, `backend/Dockerfile`, `backend/app/__init__.py`, `backend/app/db/__init__.py`).
 - [x] **CL 2.1 (`feat(db)`):** Add `app/config.py`, `app/db/session.py`, SQLAlchemy 2.0 `JSONB` models (`MoaRegistry`, `Document`, `DocumentPage`, `DocumentClause`), and `tests/test_db_and_config.py`.
-- [ ] **CL 2.2 (`feat(moa-client)`):** Implement `app/services/moa_client.py` (on-call `PesticideData.aspx?$filter=...` + 4 sub-endpoints lookup with PostgreSQL snapshot upsert) + unit tests.
+- [x] **CL 2.2 (`feat(moa-client)`):** Implement `app/services/moa_client.py` (on-call `PesticideData.aspx?$filter=...` + 4 sub-endpoints lookup with PostgreSQL snapshot upsert) + unit tests.
 - [ ] **Checkpoint / PR #2:** Review & merge `develop` → `main` for Component 2.
 
 ## Component 3: Pre-Processing, Constrained Decoding Schemas & Prompts
