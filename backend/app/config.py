@@ -139,6 +139,8 @@ class Settings(BaseSettings):
                     "GOOGLE_CLOUD_PROJECT is required when GOOGLE_GENAI_USE_VERTEXAI=true."
                 )
             if sa_key_path is not None:
+                if not sa_key_path.is_file():
+                    raise ValueError(f"GCP service-account key file not found: {sa_key_path}")
                 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(sa_key_path)
             return {
                 "vertexai": True,

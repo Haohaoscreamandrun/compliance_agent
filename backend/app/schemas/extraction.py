@@ -27,6 +27,10 @@ class ProductLabelExtraction(BaseModel):
         default=None,
         description="農藥普通名稱 / Active ingredient common name. Extract exact printed spelling verbatim; do not translate.",
     )
+    iupac_name: GroundedField[str] | None = Field(
+        default=None,
+        description="IUPAC / chemical name of the active ingredient printed on the label (for linking to MSDS/MOA).",
+    )
     dosage_and_content: GroundedField[str] | None = Field(
         default=None,
         description="Dosage, concentration, or active-ingredient purity e.g. 100 g/L, 75.000 (%), or 95% Tech.",
@@ -50,6 +54,14 @@ class ProductLabelExtraction(BaseModel):
     local_permit_holder_address: GroundedField[str] | None = Field(
         default=None,
         description="Local permit holder/importer/manufacturer address as printed.",
+    )
+    repackaging_factory_name: GroundedField[str] | None = Field(
+        default=None,
+        description="分裝工廠名稱 (Local repackaging factory name if printed on the label).",
+    )
+    repackaging_factory_address: GroundedField[str] | None = Field(
+        default=None,
+        description="分裝工廠地址 (Local repackaging factory address if printed on the label).",
     )
     emergency_phone: GroundedField[str] | None = Field(
         default=None,
@@ -161,6 +173,10 @@ class MsdsExtraction(BaseModel):
     common_name: GroundedField[str] | None = Field(
         default=None,
         description="Active ingredient common name (繁體中文, 簡體中文, or English) used to link to registration.",
+    )
+    iupac_or_cas_name: GroundedField[str] | None = Field(
+        default=None,
+        description="Section 3 active ingredient IUPAC/CAS chemical name and CAS number (e.g. '139968-49-3') for linking to label/MOA.",
     )
     dosage_and_content: GroundedField[str] | None = Field(
         default=None,
