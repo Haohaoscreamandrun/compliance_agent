@@ -13,6 +13,7 @@ import pytest
 from PIL import Image
 
 from app.config import Settings
+from google.genai import errors as genai_errors
 from app.schemas.extraction import (
     MsdsExtraction,
     OfficialLetterExtraction,
@@ -220,10 +221,13 @@ async def test_parse_document_pages_filters_out_of_window_and_raises_on_blocked_
         return SimpleNamespace(text=payload.model_dump_json(), candidates=[SimpleNamespace(finish_reason="STOP")])
 
     fake_client = SimpleNamespace(aio=SimpleNamespace(models=SimpleNamespace(generate_content=fake_generate_content)))
-    result = await parse_document_pages(fake_client, "gemini-2.5-flash", "msds", pages)  # type: ignore[arg-type]
+    parsed_result = await parse_document_pages(fake_client, "gemini-3.8-flash", "msds", pages)  # type: ignore[arg-type]
 
     assert len(configs) == 2
     assert getattr(configs[0], "system_instruction", None) is not None
+    assert parsed_result.model_used == "gemini-3.8-flash"
+    assert parsed_result.used_fallback is False
+    result = parsed_result.extraction
     assert isinstance(result, MsdsExtraction)
     assert result.common_name is not None and result.common_name.value == "Carbendazim"
     assert result.issued_version is not None and result.issued_version.page == 10
@@ -234,7 +238,35 @@ async def test_parse_document_pages_filters_out_of_window_and_raises_on_blocked_
 
     blocked_client = SimpleNamespace(aio=SimpleNamespace(models=SimpleNamespace(generate_content=blocked_generate_content)))
     with pytest.raises(GeminiParseError, match="SAFETY"):
-        await parse_document_pages(blocked_client, "gemini-2.5-flash", "label", pages[:1])  # type: ignore[arg-type]
+        await parse_document_pages(blocked_client, "gemini-3.8-flash", "label", pages[:1])  # type: ignore[arg-type]
+
+
+async def test_parse_document_pages_fails_over_on_503_server_error() -> None:
+    pages = [
+        ProcessedPage(page_number=1, image_rel_path="pages/d/page_1.webp", width_px=800, height_px=1000, webp_bytes=b"RIFF")
+    ]
+    tried_models: list[str] = []
+
+    async def flaky_generate_content(*, model, contents, config):
+        tried_models.append(model)
+        if model == "gemini-3.8-flash":
+            raise genai_errors.ServerError(503, {"error": {"message": "overloaded"}}, None)
+        payload = ProductLabelExtraction(
+            reg_no={"verbatim_text": "農藥製00001", "value": "農藥製00001", "page": 1, "box_2d": [10, 10, 40, 200]}
+        )
+        return SimpleNamespace(text=payload.model_dump_json(), candidates=[SimpleNamespace(finish_reason="STOP")])
+
+    flaky_client = SimpleNamespace(aio=SimpleNamespace(models=SimpleNamespace(generate_content=flaky_generate_content)))
+    res = await parse_document_pages(
+        flaky_client,  # type: ignore[arg-type]
+        "gemini-3.8-flash",
+        "label",
+        pages,
+        fallback_models=["gemini-3.7-flash", "gemini-3.1-flash-lite"],
+    )
+    assert tried_models == ["gemini-3.8-flash", "gemini-3.7-flash"]
+    assert res.model_used == "gemini-3.7-flash"
+    assert res.used_fallback is True
 
 
 def test_extract_clauses_for_db_flattens_and_validates_constraints() -> None:

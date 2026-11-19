@@ -3,9 +3,11 @@
 
 from __future__ import annotations
 
-from typing import Any
+import logging
+from typing import Any, NamedTuple
 
 from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types
 from pydantic import BaseModel
 
@@ -14,6 +16,8 @@ from app.prompts.extraction_prompts import EXTRACTION_PROMPTS
 from app.schemas.extraction import SCHEMA_BY_DOC_TYPE
 from app.schemas.grounded import GroundedField
 from app.services.preprocessor import ProcessedPage
+
+log = logging.getLogger(__name__)
 
 MAX_SINGLE_CALL_PAGES = 8
 WINDOW_SIZE_PAGES = 5
@@ -26,6 +30,12 @@ _NO_DEDUP_LIST_FIELDS = frozenset(
 
 class GeminiParseError(RuntimeError):
     """Raised when Gemini returns an empty, blocked, or schema-invalid response."""
+
+
+class ParseResult(NamedTuple):
+    extraction: BaseModel
+    model_used: str
+    used_fallback: bool  # True when a 5xx/503 spike forced failover to a fallback model
 
 
 def build_page_windows(
@@ -131,13 +141,43 @@ def _extract_response_json(response: Any, schema_cls: type[BaseModel]) -> BaseMo
         raise GeminiParseError(f"Gemini response failed {schema_cls.__name__} validation: {exc}") from exc
 
 
+async def _generate_with_5xx_fallback(
+    client: genai.Client,
+    candidate_models: list[str],
+    contents: list[Any],
+    config: types.GenerateContentConfig,
+) -> tuple[Any, str]:
+    """Call Gemini, failing over to fallback models only on transient 5xx/503 ServerError."""
+    last_error: genai_errors.ServerError | None = None
+    for idx, model in enumerate(candidate_models):
+        try:
+            response = await client.aio.models.generate_content(
+                model=model,
+                contents=contents,
+                config=config,
+            )
+            return response, model
+        except genai_errors.ServerError as exc:
+            last_error = exc
+            if idx + 1 < len(candidate_models):
+                log.warning(
+                    "Gemini model %s returned ServerError (%s); failing over to %s",
+                    model,
+                    exc,
+                    candidate_models[idx + 1],
+                )
+    assert last_error is not None
+    raise last_error
+
+
 async def parse_document_pages(
     client: genai.Client,
     model_name: str,
     doc_type: str,
     pages: list[ProcessedPage],
-) -> BaseModel:
-    """Run interleaved Gemini constrained decoding across page windows and merge deterministically."""
+    fallback_models: list[str] | None = None,
+) -> ParseResult:
+    """Run interleaved Gemini constrained decoding across page windows with 503 failover."""
     if doc_type not in SCHEMA_BY_DOC_TYPE:
         raise ValueError(f"Unsupported doc_type: {doc_type!r}")
     schema_cls = SCHEMA_BY_DOC_TYPE[doc_type]
@@ -147,27 +187,36 @@ async def parse_document_pages(
         if doc_type == "label"
         else types.MediaResolution.MEDIA_RESOLUTION_MEDIUM
     )
+    candidate_models = list(dict.fromkeys([model_name, *(fallback_models or [])]))
+
+    config = types.GenerateContentConfig(
+        system_instruction=EXTRACTION_PROMPTS[doc_type],
+        temperature=0.0,
+        media_resolution=resolution,
+        response_mime_type="application/json",
+        response_json_schema=schema_cls.model_json_schema(),
+    )
 
     window_results: list[BaseModel] = []
+    models_used: list[str] = []
     for window in windows:
         contents = build_interleaved_contents(doc_type, window)
-        response = await client.aio.models.generate_content(
-            model=model_name,
-            contents=contents,
-            config=types.GenerateContentConfig(
-                system_instruction=EXTRACTION_PROMPTS[doc_type],
-                temperature=0.0,
-                media_resolution=resolution,
-                response_mime_type="application/json",
-                response_schema=schema_cls,
-            ),
+        response, used_model = await _generate_with_5xx_fallback(
+            client, candidate_models, contents, config
         )
+        models_used.append(used_model)
         parsed = _extract_response_json(response, schema_cls)
         valid_pages = {p.page_number for p in window}
         bounded = _filter_to_window_bounds(parsed, schema_cls=schema_cls, valid_pages=valid_pages)
         window_results.append(bounded)
 
-    return merge_window_extractions(schema_cls, window_results)
+    final_model = models_used[-1]
+    used_fallback = any(m != model_name for m in models_used)
+    return ParseResult(
+        extraction=merge_window_extractions(schema_cls, window_results),
+        model_used=final_model,
+        used_fallback=used_fallback,
+    )
 
 
 def extract_clauses_for_db(

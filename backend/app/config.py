@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     # --- 1. Google Gemini API / Vertex AI ---
     gemini_api_key: str = Field(default="")
     gemini_parse_model: str = Field(default="gemini-3.8-flash")
+    gemini_parse_fallback_models: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["gemini-3.7-flash", "gemini-3.1-flash-lite"]
+    )
     gemini_parse_lite_model: str = Field(default="gemini-3.5-flash-lite")
     gemini_copilot_model: str = Field(default="gemini-3.8-flash")
 
@@ -78,7 +81,7 @@ class Settings(BaseSettings):
             return (REPO_ROOT / raw_path).resolve()
         return raw_path.resolve()
 
-    @field_validator("cors_allowed_origins", mode="before")
+    @field_validator("cors_allowed_origins", "gemini_parse_fallback_models", mode="before")
     @classmethod
     def _parse_origins(cls, value: Any) -> list[str]:
         if isinstance(value, list):
