@@ -17,8 +17,8 @@
 
 ## Component 3: Pre-Processing, Constrained Decoding Schemas & Prompts
 
-- [ ] **CL 3.1 (`feat(schemas)`):** Implement `GroundedField[T]` Chain-of-Grounding (`verbatim_text` → `value` → `page` → `box_2d`) and 4 extraction schemas (`ProductLabelExtraction`, `MsdsExtraction`, `NotarizedCertExtraction`, `OfficialLetterExtraction`) + schema tests.
-- [ ] **CL 3.2 (`feat(parser)`):** Implement `preprocessor.py` (`PyMuPDF` + `Pillow` WebP normalizer), domain prompts, and `parser.py` (interleaved page-image batching + Gemini constrained decoding).
+- [x] **CL 3.1 (`feat(schemas)`):** Implement `GroundedField[T]` Chain-of-Grounding (`verbatim_text` → `value` → `page` → `box_2d`) and 4 extraction schemas (`ProductLabelExtraction`, `MsdsExtraction`, `NotarizedCertExtraction`, `OfficialLetterExtraction`) + schema tests.
+- [x] **CL 3.2 (`feat(parser)`):** Implement `preprocessor.py` (`PyMuPDF` + `Pillow` WebP normalizer), domain prompts, and `parser.py` (interleaved page-image batching + Gemini constrained decoding).
 - [ ] **Checkpoint / PR #3:** Review & merge `develop` → `main` for Component 3.
 
 ## Component 4: Deterministic Cascade Diff, Two-Phase Copilot & FastAPI Routes

@@ -47,9 +47,11 @@ def test_empty_postgres_fields_raise() -> None:
 
 
 def test_genai_credentials_mutual_exclusion_and_adc_env(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.delenv("GOOGLE_APPLICATION_CREDENTIALS", raising=False)
+    sa_file = tmp_path / "vertex-sa.json"
+    sa_file.write_text('{"type": "service_account"}', encoding="utf-8")
 
     # Mode 1: AI Studio API Key (default)
     ai_studio = Settings(
@@ -67,6 +69,7 @@ def test_genai_credentials_mutual_exclusion_and_adc_env(
         gemini_api_key="should-be-ignored",
         google_cloud_project="my-gcp-proj",
         google_cloud_location="asia-east1",
+        secrets_dir=tmp_path,
         gcp_sa_key_filename="vertex-sa.json",
     )
     assert vertex.validate_genai_credentials() == {
@@ -74,9 +77,7 @@ def test_genai_credentials_mutual_exclusion_and_adc_env(
         "project": "my-gcp-proj",
         "location": "asia-east1",
     }
-    assert os.environ["GOOGLE_APPLICATION_CREDENTIALS"] == str(
-        (REPO_ROOT / "secrets" / "vertex-sa.json").resolve()
-    )
+    assert os.environ["GOOGLE_APPLICATION_CREDENTIALS"] == str(sa_file.resolve())
 
     # Missing key in AI Studio mode raises
     with pytest.raises(ValueError, match="GEMINI_API_KEY is required"):

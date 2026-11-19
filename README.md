@@ -90,10 +90,10 @@ compliance_agent/
    * Reads uploaded PDFs (graphic-design exported label PDFs, MSDSs, certificates, and 公文) directly in RAM via `PyMuPDF` (`fitz`) and renders pages to normalized `.webp` images (longest edge `<= 1600px`, quality `85`).
    * Passes interleaved page batches (`["=== PAGE 1 ===", img_1, "=== PAGE 2 ===", img_2, ...]`, up to 8 pages per call or 5-page windows for 16-section MSDSs) with `response_mime_type="application/json"` and `response_schema`.
    * Enforces **Chain-of-Grounding (`GroundedField[T]`)** ordered `verbatim_text` → `value` → `page` → `box_2d` (`[ymin, xmin, ymax, xmax]` normalized `0–1000`) across 4 specialized schemas:
-     * `ProductLabelExtraction` (Traditional Chinese label fields + visual `GHS01–GHS09` hazard diamond classification)
-     * `NotarizedCertExtraction` (source/factory transfer clauses, old vs. new manufacturer name/address, effective dates)
-     * `MsdsExtraction` (GHS Sections 1, 2, 3 CAS ingredient table, and Section 15 regulatory notes)
-     * `OfficialLetterExtraction` (Taiwan 公文 `發文字號`, ROC-to-ISO `發文日期`, compliance deadlines, and mandates)
+     * `ProductLabelExtraction` (Traditional Chinese label images/PDFs + visual `GHS01–GHS09` hazard diamonds + APHIA drawn modification instructions)
+     * `NotarizedCertExtraction` (new-state LoA or Certificate of Registration facts, authorizing/authorized entities, product code/dosage/formulation, issuing vs. factory state)
+     * `MsdsExtraction` (繁體中文/簡體中文/English MSDSs linked via `common_name` + `dosage_and_content` + `formulation_type`; latest `issued_version`, Section 2 `GHS01–GHS09` pictograms, and hazard statements)
+     * `OfficialLetterExtraction` (Taiwan 公文 `發文字號`, ROC-to-ISO `發文日期`, `affected_reg_nos`, `chinese_common_names`, `dosage_and_formulation`, deadlines, and mandates)
 3. **Two-Phase Agentic Compliance Copilot (`Gemini 2.5 Pro / Flash`):**
    * **Phase 1 — Autonomous Function-Calling Loop:** Executes 4 deterministic/SQL tools against PostgreSQL `JSONB`:
      1. `inspect_uploaded_doc(doc_id, focus_topic)`: Retrieves all extracted legal clauses and `box_2d` coordinates for the uploaded document (`100%` recall without top-$k$ truncation).
