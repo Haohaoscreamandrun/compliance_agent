@@ -57,13 +57,27 @@ def build_interleaved_contents(
     doc_type: str,
     window_pages: list[ProcessedPage],
 ) -> list[Any]:
-    """Build interleaved multimodal parts: ['=== PAGE N ===', WebP bytes, ...]."""
+    """Build interleaved multimodal parts, using PyMuPDF digital text blocks for text-only MSDS pages."""
     if doc_type not in EXTRACTION_PROMPTS:
         raise ValueError(f"Unsupported doc_type: {doc_type!r}")
     contents: list[Any] = []
     for page in window_pages:
         contents.append(f"=== PAGE {page.page_number} ===")
-        contents.append(types.Part.from_bytes(data=page.webp_bytes, mime_type="image/webp"))
+        use_digital_text = doc_type == "msds" and bool(page.text_blocks_text)
+        if use_digital_text and not page.has_images:
+            # Pure digital MSDS page (no GHS icons/images): send PyMuPDF [0-1000] blocks only
+            contents.append(
+                "DIGITAL_TEXT_BLOCKS ([ymin, xmin, ymax, xmax] 0-1000 | text):\n"
+                + page.text_blocks_text
+            )
+        else:
+            contents.append(types.Part.from_bytes(data=page.webp_bytes, mime_type="image/webp"))
+            if use_digital_text:
+                # Hybrid page (e.g. MSDS Page 2 with GHS diamond icons): include both image + exact blocks
+                contents.append(
+                    "DIGITAL_TEXT_BLOCKS ([ymin, xmin, ymax, xmax] 0-1000 | text):\n"
+                    + page.text_blocks_text
+                )
     return contents
 
 

@@ -98,6 +98,35 @@ def test_preprocess_pdf_in_memory_writes_only_webp_never_raw_pdf(tmp_path: Path)
     assert list(tmp_path.rglob("*.pdf")) == []
 
 
+def test_preprocess_msds_extracts_digital_text_blocks_and_skips_image_part_when_no_images(
+    tmp_path: Path,
+) -> None:
+    # Build a digital PDF page with >= 80 chars and no embedded images
+    doc = pymupdf.open()
+    pg = doc.new_page(width=600, height=800)
+    pg.insert_text(
+        (72, 100),
+        "SECTION 1: Product Metaflumizone 22% SC | Version 4.0 | CAS 139968-49-3 | Issued 2026-07-26",
+    )
+    pdf_bytes = doc.tobytes()
+    doc.close()
+
+    pages = preprocess_upload_in_memory(pdf_bytes, "msds.pdf", "msds_txt", tmp_path)
+    assert len(pages) == 1
+    assert pages[0].has_images is False
+    assert "Metaflumizone 22% SC" in pages[0].text_blocks_text
+
+    # For doc_type='msds' without images, build_interleaved_contents sends text blocks only (no Part)
+    msds_contents = build_interleaved_contents("msds", pages)
+    assert msds_contents[0] == "=== PAGE 1 ==="
+    assert isinstance(msds_contents[1], str) and "DIGITAL_TEXT_BLOCKS" in msds_contents[1]
+
+    # For doc_type='official_letter' (scanned paper), it still sends the WebP image Part
+    letter_contents = build_interleaved_contents("official_letter", pages)
+    assert letter_contents[0] == "=== PAGE 1 ==="
+    assert not isinstance(letter_contents[1], str)
+
+
 def test_preprocess_giant_mediabox_pdf_scales_safely_without_oom(tmp_path: Path) -> None:
     # A 14400x14400 pt PDF MediaBox must be scaled to <= 1600px directly during rasterization
     pdf_bytes = _make_in_memory_pdf(1, width=14400, height=14400)

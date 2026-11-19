@@ -27,6 +27,7 @@ _ALLOWED_PIL_FORMATS = ("JPEG", "PNG", "WEBP", "TIFF")
 _MAX_IMAGE_PIXELS = 50_000_000
 _MAX_PDF_PAGES = 50
 _MAX_PDF_ZOOM = 3.0  # Caps upscaling of small labels at ~216 DPI
+_MIN_DIGITAL_TEXT_CHARS = 80
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +37,8 @@ class ProcessedPage:
     width_px: int
     height_px: int
     webp_bytes: bytes
+    text_blocks_text: str = ""
+    has_images: bool = False
 
 
 def _validate_doc_id(doc_id: str) -> str:
@@ -84,12 +87,40 @@ def _normalize_pil_to_webp(
     return buf.getvalue(), width, height
 
 
+def _extract_digital_blocks_0_1000(page: pymupdf.Page) -> tuple[str, bool]:
+    """Extract PyMuPDF text blocks normalized to [ymin, xmin, ymax, xmax] (0-1000)."""
+    rect = page.rect
+    w = max(rect.width, 1.0)
+    h = max(rect.height, 1.0)
+    lines: list[str] = []
+    char_count = 0
+    for block in page.get_text("blocks"):
+        # block tuple: (x0, y0, x1, y1, text, block_no, block_type); block_type 0 = text
+        if len(block) < 7 or block[6] != 0:
+            continue
+        text = " ".join(str(block[4]).split())
+        if not text:
+            continue
+        char_count += len(text)
+        xmin = max(0, min(1000, round((block[0] - rect.x0) / w * 1000)))
+        ymin = max(0, min(1000, round((block[1] - rect.y0) / h * 1000)))
+        xmax = max(0, min(1000, round((block[2] - rect.x0) / w * 1000)))
+        ymax = max(0, min(1000, round((block[3] - rect.y0) / h * 1000)))
+        if ymin < ymax and xmin < xmax:
+            lines.append(f"[{ymin}, {xmin}, {ymax}, {xmax}] | {text}")
+
+    has_images = bool(page.get_images(full=False))
+    if char_count < _MIN_DIGITAL_TEXT_CHARS:
+        return "", has_images
+    return "\n".join(lines), has_images
+
+
 def _render_pdf_pages_to_webp(
     raw_bytes: bytes,
     filename: str,
     max_edge_px: int,
     webp_quality: int,
-) -> list[tuple[bytes, int, int]]:
+) -> list[tuple[bytes, int, int, str, bool]]:
     try:
         pdf = pymupdf.open(stream=raw_bytes, filetype="pdf")
     except Exception as exc:
@@ -103,7 +134,7 @@ def _render_pdf_pages_to_webp(
         if pdf.page_count > _MAX_PDF_PAGES:
             raise ValueError(f"PDF exceeds maximum allowed page count ({_MAX_PDF_PAGES}).")
 
-        rendered: list[tuple[bytes, int, int]] = []
+        rendered: list[tuple[bytes, int, int, str, bool]] = []
         for page in pdf:
             rect = page.rect
             longest_pt = max(rect.width, rect.height, 1.0)
@@ -111,7 +142,9 @@ def _render_pdf_pages_to_webp(
             zoom = min(max_edge_px / longest_pt, _MAX_PDF_ZOOM)
             pix = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), alpha=False)
             pil_img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
-            rendered.append(_normalize_pil_to_webp(pil_img, max_edge_px, webp_quality))
+            webp_bytes, w_px, h_px = _normalize_pil_to_webp(pil_img, max_edge_px, webp_quality)
+            text_blocks, has_images = _extract_digital_blocks_0_1000(page)
+            rendered.append((webp_bytes, w_px, h_px, text_blocks, has_images))
         return rendered
     finally:
         pdf.close()
@@ -122,18 +155,21 @@ def _render_image_frames_to_webp(
     filename: str,
     max_edge_px: int,
     webp_quality: int,
-) -> list[tuple[bytes, int, int]]:
+) -> list[tuple[bytes, int, int, str, bool]]:
     try:
         with Image.open(BytesIO(raw_bytes), formats=_ALLOWED_PIL_FORMATS) as img:
             w, h = img.size
             if w <= 0 or h <= 0 or (w * h) > _MAX_IMAGE_PIXELS:
                 raise ValueError(f"Image dimensions ({w}x{h}) exceed safe pixel limit.")
-            rendered: list[tuple[bytes, int, int]] = []
+            rendered: list[tuple[bytes, int, int, str, bool]] = []
             for frame_idx, frame in enumerate(ImageSequence.Iterator(img), start=1):
                 if frame_idx > _MAX_PDF_PAGES:
                     raise ValueError(f"Multi-page image exceeds {_MAX_PDF_PAGES} frames.")
                 frame.load()
-                rendered.append(_normalize_pil_to_webp(frame.copy(), max_edge_px, webp_quality))
+                webp_bytes, w_px, h_px = _normalize_pil_to_webp(
+                    frame.copy(), max_edge_px, webp_quality
+                )
+                rendered.append((webp_bytes, w_px, h_px, "", True))
             return rendered
     except ValueError:
         raise
@@ -179,7 +215,7 @@ def preprocess_upload_in_memory(
 
     processed: list[ProcessedPage] = []
     try:
-        for idx, (webp_bytes, width_px, height_px) in enumerate(rendered, start=1):
+        for idx, (webp_bytes, width_px, height_px, text_blocks, has_images) in enumerate(rendered, start=1):
             (staging_dir / f"page_{idx}.webp").write_bytes(webp_bytes)
             processed.append(
                 ProcessedPage(
@@ -188,6 +224,8 @@ def preprocess_upload_in_memory(
                     width_px=width_px,
                     height_px=height_px,
                     webp_bytes=webp_bytes,
+                    text_blocks_text=text_blocks,
+                    has_images=has_images,
                 )
             )
         if target_dir.exists():
