@@ -32,9 +32,9 @@ class Settings(BaseSettings):
 
     # --- 1. Google Gemini API / Vertex AI ---
     gemini_api_key: str = Field(default="")
-    gemini_parse_model: str = Field(default="gemini-2.5-flash")
-    gemini_parse_lite_model: str = Field(default="gemini-2.5-flash-lite")
-    gemini_copilot_model: str = Field(default="gemini-2.5-pro")
+    gemini_parse_model: str = Field(default="gemini-3.8-flash")
+    gemini_parse_lite_model: str = Field(default="gemini-3.5-flash-lite")
+    gemini_copilot_model: str = Field(default="gemini-3.8-flash")
 
     google_genai_use_vertexai: bool = Field(default=False)
     google_cloud_project: str = Field(default="")
