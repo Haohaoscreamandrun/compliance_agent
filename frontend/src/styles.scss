@@ -1,4 +1,65 @@
-/* You can add global styles to this file, and also import other style files */
+/* Global design tokens & native light/dark support (modern-web-guidance: dark-mode, dialog) */
+:root {
+  color-scheme: light dark;
+  accent-color: var(--accent-color);
 
-html, body { height: 100%; }
-body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
+  --surface-bg-light: #f6f8fb;
+  --surface-bg-dark: #111418;
+  --surface-card-light: #ffffff;
+  --surface-card-dark: #1a1f26;
+  --text-primary-light: #182026;
+  --text-primary-dark: #edf2f7;
+  --text-muted-light: #52606d;
+  --text-muted-dark: #9aa5b1;
+  --border-subtle-light: #d9e2ec;
+  --border-subtle-dark: #2d3748;
+  --accent-light: #0056b3;
+  --accent-dark: #4dabf7;
+
+  --surface-bg: var(--surface-bg-light);
+  --surface-card: var(--surface-card-light);
+  --text-primary: var(--text-primary-light);
+  --text-muted: var(--text-muted-light);
+  --border-subtle: var(--border-subtle-light);
+  --accent-color: var(--accent-light);
+
+  @media (prefers-color-scheme: dark) {
+    --surface-bg: var(--surface-bg-dark);
+    --surface-card: var(--surface-card-dark);
+    --text-primary: var(--text-primary-dark);
+    --text-muted: var(--text-muted-dark);
+    --border-subtle: var(--border-subtle-dark);
+    --accent-color: var(--accent-dark);
+  }
+
+  @supports (color: light-dark(white, black)) {
+    --surface-bg: light-dark(var(--surface-bg-light), var(--surface-bg-dark));
+    --surface-card: light-dark(var(--surface-card-light), var(--surface-card-dark));
+    --text-primary: light-dark(var(--text-primary-light), var(--text-primary-dark));
+    --text-muted: light-dark(var(--text-muted-light), var(--text-muted-dark));
+    --border-subtle: light-dark(var(--border-subtle-light), var(--border-subtle-dark));
+    --accent-color: light-dark(var(--accent-light), var(--accent-dark));
+  }
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--surface-bg);
+  color: var(--text-primary);
+  font-family: Roboto, "Noto Sans TC", "Microsoft JhengHei", "Helvetica Neue", sans-serif;
+}
+
+/* Prevent scroll chaining on modal <dialog> & ::backdrop (modern-web-guidance: dialog) */
+dialog:modal {
+  overscroll-behavior: contain;
+}
+
+dialog::backdrop {
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
