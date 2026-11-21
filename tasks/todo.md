@@ -30,7 +30,7 @@
 
 ## Component 5: Angular + Angular Material UI & `<svg viewBox="0 0 1000 1000">` BBox Viewer
 
-- [ ] **CL 5.0 (`chore(frontend-scaffold)`):** Isolate pure Angular CLI & Angular Material scaffold (`npx @angular/cli@19 new frontend` + `ng add @angular/material` + `nginx.conf`) with zero custom business logic.
+- [x] **CL 5.0 (`chore(frontend-scaffold)`):** Isolate pure Angular CLI & Angular Material scaffold (`npx @angular/cli@19 new frontend` + `ng add @angular/material` + `nginx.conf`) with zero custom business logic.
 - [ ] **CL 5.1 (`feat(ui-core)`):** Add `color-scheme: light dark` & `lang="zh-Hant"` root config, TypeScript models (`compliance.models.ts`), and `ComplianceApiService`.
 - [ ] **CL 5.2 (`feat(ui-viewer)`):** Build `BboxSvgViewerComponent` (inline `<svg role="img" viewBox="0 0 1000 1000" preserveAspectRatio="none">` over `fetchpriority="high"` `.webp` `<img>` with `width_px`/`height_px` zero-CLS sizing and `contain: layout style paint`), `CopilotAuditPanelComponent` (`@container` queries, semantic `<caption>`/`<th scope="col|row">` checklist, `>=24x24px` native `<button>` citations, bilingual `lang` tags, `<progress>` state), and native `<dialog>.showModal()` upload modal.
 - [ ] **Checkpoint / PR #5:** Review & merge `develop` → `main` for Component 5.
