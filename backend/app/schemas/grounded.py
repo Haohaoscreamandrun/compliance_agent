@@ -49,6 +49,10 @@ class GroundedField(BaseModel, Generic[T]):
         max_length=4,
         description="Tight 2D bounding box [ymin, xmin, ymax, xmax] normalized to 0-1000 on that page.",
     )
+    extra_boxes_2d: list[list[Coord0To1000]] = Field(
+        default_factory=list,
+        description="Optional additional tight [ymin, xmin, ymax, xmax] boxes when a phrase wraps across multiple lines.",
+    )
 
     @field_validator("verbatim_text")
     @classmethod
@@ -95,3 +99,12 @@ class GroundedField(BaseModel, Generic[T]):
                 f"box_2d must have positive area (ymin < ymax and xmin < xmax), got {[ymin, xmin, ymax, xmax]}."
             )
         return [ymin, xmin, ymax, xmax]
+
+    @field_validator("extra_boxes_2d", mode="before")
+    @classmethod
+    def _normalize_extra_boxes(cls, raw: object) -> list[list[int]]:
+        if raw is None:
+            return []
+        if not isinstance(raw, (list, tuple)):
+            raise ValueError("extra_boxes_2d must be a list of 4-element boxes.")
+        return [cls._normalize_and_validate_box_2d(box) for box in raw]

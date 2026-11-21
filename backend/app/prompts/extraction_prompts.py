@@ -11,7 +11,8 @@ GROUNDING RULES (MANDATORY):
    - `verbatim_text`: exact text (or visual symbol description) printed on that page.
    - `value`: normalized canonical value requested by the field description.
    - `page`: global integer `N`.
-   - `box_2d`: tight `[ymin, xmin, ymax, xmax]` coordinates scaled 0-1000 on page `N`.
+   - `box_2d`: tight `[ymin, xmin, ymax, xmax]` coordinates scaled 0-1000 on page `N` (first line if wrapped).
+   - `extra_boxes_2d`: optional list of tight `[ymin, xmin, ymax, xmax]` boxes for continuation lines when a phrase wraps across multiple lines (otherwise `[]`).
 3. NEVER invent, guess, or extrapolate fields that do not appear on the provided pages.
    Return `null` for absent scalar fields and `[]` for absent list fields.
 """.strip()
@@ -20,16 +21,18 @@ EXTRACTION_PROMPTS: dict[str, str] = {
     "label": f"""You are a Taiwan agrochemical Regulatory Affairs (RA) label inspector.
 Extract all structured fields from this product or active-ingredient (原體) label (JPEG image or PDF):
 - Extract `common_name`, `foreign_manufacturer_name`, and `foreign_manufacturer_address` with EXACT printed spelling verbatim (do not translate or alter abbreviations).
+- For `formulation_type`, extract the official formulation type (e.g. `水分散性粒劑` → `WG`, `水懸劑`/`懸浮劑` → `SC`, `乳劑` → `EC`, `可濕性粉劑` → `WP`); do NOT extract trade-name suffixes such as `DF` in `克魔力®DF`.
 - Normalize `reg_no` in `value` to canonical format without 字/第/號 (e.g., '農藥製00001', '農藥進00001', '農藥原進00001', '農藥原製00195').
 - Visually classify EVERY GHS hazard diamond pictogram on the label into `GHS01`-`GHS09` with its individual tight `box_2d`.
 - IMPORTANT: Look carefully for handwritten, drawn, redline, or stamped instructions added by APHIA (防檢署) directly on the label. Capture every single APHIA modification instruction in `aphia_review_annotations`.
 
 {_COMMON_GROUNDING_RULES}""",
-    "change_cert": f"""You are a Taiwan agrochemical Regulatory Affairs (RA) specialist reviewing notarized supplier/government certificates (LoA or Certificate of Registration).
+    "change_cert": f"""You are a Taiwan agrochemical Regulatory Affairs (RA) specialist reviewing notarized supplier/government certificates (LoA, MoC, Free Sale, LoO, or other).
 Note that these certificates always present the NEW state (do not look for old factory info):
-- Classify `cert_subtype` anchored to the header/title: `'loa'` (Letter of Authorization), `'cert_of_registration'` (state/country production proof), or `'other'`.
-- For LoA: capture `authorizing_entity_name`/`address`, `authorized_entity_name`/`address`, `product_internal_code`, `common_name`, `dosage_and_content`, and `formulation_type`. If the LoA also names the manufacturing factory, capture it in `certified_factory_name`/`address` (and `issuing_state_or_country` vs `factory_state_or_country`).
-- For Certificate of Registration: capture `certified_factory_name`/`address`, `common_name`, `dosage_and_content`, `formulation_type`, plus `issuing_state_or_country` and `factory_state_or_country` in canonical English `'State/Province, Country'` format (e.g. `'Delaware, USA'`, `'Texas, USA'`, `'Bavaria, Germany'`).
+- Classify `cert_subtype` anchored to the header/title: `'loa'` (Letter of Authorization), `'moc'` (Manufacture Certification / Certificate of Manufacture), `'free_sale'` (Certificate of Free Sale / Registration), `'loo'` (Letter of Origin stating active-ingredient origin factory), or `'other'`.
+- Extract EVERY listed product row into `products[]` (do not stop after the first row). For each row capture `brand_or_product_name`, `product_internal_code`, `common_name` (join mixtures with `'+'` e.g. `'Metiram + Pyraclostrobin'`), `dosage_and_content` (e.g. `'80%'` or `'55% + 5%'`), and `formulation_type` (`'WG'`, `'SC'`, `'SL'`, etc.).
+- For LoA: capture `authorizing_entity_name`/`address` and `authorized_entity_name`/`address`. If the LoA also names the manufacturing factory, capture it in `certified_factory_name`/`address` (and `issuing_state_or_country` vs `factory_state_or_country`).
+- For MoC / Free Sale / LoO: capture `certified_factory_name`/`address`, plus `issuing_state_or_country` and `factory_state_or_country` in canonical English `'State/Province, Country'` format (e.g. `'Delaware, USA'`, `'Texas, USA'`, `'Bavaria, Germany'`).
 - Extract all entity names, addresses, and `common_name` verbatim without altering spelling or abbreviations.
 - Put printed dates in `verbatim_text` and ISO `YYYY-MM-DD` in `value`.
 

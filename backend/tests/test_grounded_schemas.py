@@ -19,7 +19,7 @@ from app.schemas.grounded import GroundedField
 
 
 def test_grounded_field_preserves_chain_of_grounding_field_order_and_bounds() -> None:
-    expected_order = ["verbatim_text", "value", "page", "box_2d"]
+    expected_order = ["verbatim_text", "value", "page", "box_2d", "extra_boxes_2d"]
     assert list(GroundedField[str].model_fields.keys()) == expected_order
 
     json_schema = GroundedField[str].model_json_schema()
@@ -118,12 +118,28 @@ def test_populated_extraction_models_and_enum_validation() -> None:
     assert len(label.aphia_review_annotations) == 1
 
     cert = NotarizedCertExtraction(
-        cert_subtype={"verbatim_text": "CERTIFICATE OF REGISTRATION", "value": "cert_of_registration", "page": 1, "box_2d": [50, 100, 90, 900]},
+        cert_subtype={"verbatim_text": "CERTIFICATE OF FREE SALE", "value": "free_sale", "page": 1, "box_2d": [50, 100, 90, 900]},
         issuing_state_or_country={"verbatim_text": "State of Delaware", "value": "Delaware, USA", "page": 1, "box_2d": [120, 100, 150, 400]},
         factory_state_or_country={"verbatim_text": "Houston, Texas", "value": "Texas, USA", "page": 1, "box_2d": [300, 100, 330, 500]},
+        products=[
+            {
+                "brand_or_product_name": {"verbatim_text": "KUMULUS 80 DF", "value": "KUMULUS 80 DF", "page": 1, "box_2d": [350, 100, 380, 300]},
+                "common_name": {"verbatim_text": "Sulfur", "value": "Sulfur", "page": 1, "box_2d": [350, 310, 380, 400]},
+            }
+        ],
     )
-    assert cert.cert_subtype is not None and cert.cert_subtype.value == "cert_of_registration"
+    assert cert.cert_subtype is not None and cert.cert_subtype.value == "free_sale"
+    assert len(cert.products) == 1 and cert.products[0].common_name is not None
     assert not any(k.startswith("old_") for k in NotarizedCertExtraction.model_fields)
+
+    wrapped = GroundedField[str](
+        verbatim_text="Line 1\nLine 2",
+        value="Line 1 Line 2",
+        page=1,
+        box_2d=[100, 400, 120, 900],
+        extra_boxes_2d=[[122, 100, 142, 600]],
+    )
+    assert wrapped.extra_boxes_2d == [[122, 100, 142, 600]]
 
     msds = MsdsExtraction(
         issued_version={"verbatim_text": "Version 4.2 (2026-05-01)", "value": "4.2 / 2026-05-01", "page": 1, "box_2d": [20, 700, 50, 950]},
@@ -153,7 +169,7 @@ def test_google_genai_schema_compiler_preserves_descriptions_bounds_and_ordering
 ) -> None:
     monkeypatch.delenv("GOOGLE_GENAI_USE_VERTEXAI", raising=False)
     dummy_client = Client(api_key="test-key-not-called", vertexai=False)
-    expected_order = ["verbatim_text", "value", "page", "box_2d"]
+    expected_order = ["verbatim_text", "value", "page", "box_2d", "extra_boxes_2d"]
 
     for doc_type, schema_cls in SCHEMA_BY_DOC_TYPE.items():
         compiled = _transformers.t_schema(dummy_client, schema_cls)
@@ -173,7 +189,7 @@ def test_google_genai_schema_compiler_preserves_descriptions_bounds_and_ordering
     compiled_cert = _transformers.t_schema(dummy_client, NotarizedCertExtraction)
     subtype_schema = compiled_cert.properties["cert_subtype"]
     assert subtype_schema.property_ordering == expected_order
-    assert subtype_schema.properties["value"].enum == ["loa", "cert_of_registration", "other"]
+    assert subtype_schema.properties["value"].enum == ["loa", "moc", "free_sale", "loo", "other"]
 
     compiled_letter = _transformers.t_schema(dummy_client, OfficialLetterExtraction)
     assert "ROC date" in (compiled_letter.properties["issue_date"].description or "")
