@@ -23,9 +23,9 @@
 
 ## Component 4: Deterministic Cascade Diff, Two-Phase Copilot & FastAPI Routes
 
-- [ ] **CL 4.1 (`feat(diff)`):** Implement `cascade_diff.py` across Old Label, New MSDS, MOA Registry, Change Certificate, and Official Letters + unit tests.
-- [ ] **CL 4.2 (`feat(copilot)`):** Implement the 4 agent tools (`tools.py`), `ComplianceAuditReport` schema, and Two-Phase Copilot (`copilot.py`) + unit tests.
-- [ ] **CL 4.3 (`feat(api)`):** Wire FastAPI endpoints (`routes_registry.py`, `routes_documents.py`, `routes_copilot.py`, `main.py`) + seed fixtures.
+- [x] **CL 4.1 (`feat(diff)`):** Implement `cascade_diff.py` across Old Label, New MSDS, MOA Registry, Change Certificate, and Official Letters + unit tests.
+- [x] **CL 4.2 (`feat(copilot)`):** Implement the 4 agent tools (`tools.py`), `ComplianceAuditReport` schema, and Two-Phase Copilot (`copilot.py`) + unit tests.
+- [x] **CL 4.3 (`feat(api)`):** Wire FastAPI endpoints (`routes_registry.py`, `routes_documents.py`, `routes_copilot.py`, `main.py`) + seed fixtures.
 - [ ] **Checkpoint / PR #4:** Review & merge `develop` → `main` for Component 4.
 
 ## Component 5: Angular + Angular Material UI & `<svg viewBox="0 0 1000 1000">` BBox Viewer
@@ -34,3 +34,7 @@
 - [ ] **CL 5.1 (`feat(ui-core)`):** Add `color-scheme: light dark` & `lang="zh-Hant"` root config, TypeScript models (`compliance.models.ts`), and `ComplianceApiService`.
 - [ ] **CL 5.2 (`feat(ui-viewer)`):** Build `BboxSvgViewerComponent` (inline `<svg role="img" viewBox="0 0 1000 1000" preserveAspectRatio="none">` over `fetchpriority="high"` `.webp` `<img>` with `width_px`/`height_px` zero-CLS sizing and `contain: layout style paint`), `CopilotAuditPanelComponent` (`@container` queries, semantic `<caption>`/`<th scope="col|row">` checklist, `>=24x24px` native `<button>` citations, bilingual `lang` tags, `<progress>` state), and native `<dialog>.showModal()` upload modal.
 - [ ] **Checkpoint / PR #5:** Review & merge `develop` → `main` for Component 5.
+
+## Future Enhancements (Post-MVP)
+
+- [ ] **APHIA Announcements & Chemical Assessments:** Add separate lookup/sync for `pesticide.aphia.gov.tw` official announcements (`農藥公告`), banned/restricted/carcinogen lists, and ACRI chemical risk assessments (not exposed in `EIR027`).

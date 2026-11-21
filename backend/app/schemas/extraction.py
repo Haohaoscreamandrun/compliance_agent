@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from app.schemas.grounded import GhsPictogramCode, GroundedField
 
-CertSubtype = Literal["loa", "cert_of_registration", "other"]
+CertSubtype = Literal["loa", "moc", "free_sale", "loo", "other"]
 
 
 class ProductLabelExtraction(BaseModel):
@@ -85,12 +85,37 @@ class ProductLabelExtraction(BaseModel):
     )
 
 
+class AuthorizedProductItem(BaseModel):
+    """One authorized/registered product row inside a single- or multi-product certificate."""
+
+    brand_or_product_name: GroundedField[str] | None = Field(
+        default=None,
+        description="Commercial brand or product name e.g. 'KUMULUS 80 DF' or 'CABRIO TOP'.",
+    )
+    product_internal_code: GroundedField[str] | None = Field(
+        default=None,
+        description="Chemical internal product code if stated e.g. 'BAS 175 01 F'.",
+    )
+    common_name: GroundedField[str] | None = Field(
+        default=None,
+        description="Active ingredient common name (for mixtures use '+', e.g. 'Metiram + Pyraclostrobin'). Extract exact printed spelling verbatim; do not translate.",
+    )
+    dosage_and_content: GroundedField[str] | None = Field(
+        default=None,
+        description="Dosage/concentration e.g. '80%', '100 g/L', or '55% + 5%' for mixtures.",
+    )
+    formulation_type: GroundedField[str] | None = Field(
+        default=None,
+        description="Formulation type e.g. SL, WP, EC, WG, SC.",
+    )
+
+
 class NotarizedCertExtraction(BaseModel):
     """Structured extraction for new-state LoA or Certificate of Registration documents."""
 
     cert_subtype: GroundedField[CertSubtype] | None = Field(
         default=None,
-        description="'loa' (Letter of Authorization), 'cert_of_registration' (state/country production proof), or 'other', anchored to the document header/title.",
+        description="'loa' (Letter of Authorization), 'moc' (Manufacture Certification), 'free_sale' (Certificate of Free Sale / Registration), 'loo' (Letter of Origin for active-ingredient origin), or 'other', anchored to the header/title.",
     )
     certificate_title: GroundedField[str] | None = Field(default=None)
     effective_date: GroundedField[str] | None = Field(
@@ -140,22 +165,10 @@ class NotarizedCertExtraction(BaseModel):
         description="Full physical address of the certified factory verbatim.",
     )
 
-    # Product identification (internal code, common name, dosage, formulation)
-    product_internal_code: GroundedField[str] | None = Field(
-        default=None,
-        description="Chemical internal product code if stated (especially in LoA).",
-    )
-    common_name: GroundedField[str] | None = Field(
-        default=None,
-        description="Active ingredient common name. Extract exact printed spelling verbatim; do not translate.",
-    )
-    dosage_and_content: GroundedField[str] | None = Field(
-        default=None,
-        description="Dosage/concentration e.g. 100 g/L or 75%.",
-    )
-    formulation_type: GroundedField[str] | None = Field(
-        default=None,
-        description="Formulation type e.g. SL, WP, EC.",
+    # Product identification (supports single-product CORs and multi-product LoAs)
+    products: list[AuthorizedProductItem] = Field(
+        default_factory=list,
+        description="Every authorized or registered product row listed in the certificate (do not stop after the first row).",
     )
     key_legal_clauses: list[GroundedField[str]] = Field(
         default_factory=list,

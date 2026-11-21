@@ -41,12 +41,15 @@ class ProcessedPage:
     has_images: bool = False
 
 
-def _validate_doc_id(doc_id: str) -> str:
+def validate_doc_id(doc_id: str) -> str:
     if not _SAFE_DOC_ID.match(doc_id) or doc_id.upper() in _WINDOWS_RESERVED:
         raise ValueError(
             f"doc_id must match ^[A-Za-z0-9_-]{{1,64}}$ (non-reserved), got {doc_id!r}"
         )
     return doc_id
+
+
+_validate_doc_id = validate_doc_id
 
 
 def _composite_alpha_onto_white(img: Image.Image) -> Image.Image:

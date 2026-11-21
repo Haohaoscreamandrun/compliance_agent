@@ -16,6 +16,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -83,6 +84,13 @@ class Document(Base):
         ),
         CheckConstraint("page_count >= 1", name="ck_page_count"),
         Index("ix_documents_baseline_lookup", "reg_no", "doc_type", "is_active_baseline"),
+        Index(
+            "uq_documents_active_baseline",
+            "reg_no",
+            "doc_type",
+            unique=True,
+            postgresql_where=text("is_active_baseline IS TRUE AND reg_no IS NOT NULL"),
+        ),
     )
 
     doc_id: Mapped[str] = mapped_column(String(64), primary_key=True)

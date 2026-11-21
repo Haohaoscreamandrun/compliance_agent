@@ -8,6 +8,7 @@ from contextlib import contextmanager
 from typing import Iterator
 
 from google import genai
+from google.genai import types
 
 from app.config import Settings
 
@@ -30,5 +31,9 @@ def _isolated_genai_env(use_vertexai: bool) -> Iterator[None]:
 def build_genai_client(settings: Settings) -> genai.Client:
     """Create a google-genai Client using mutually-exclusive credentials from Settings."""
     kwargs = settings.validate_genai_credentials()
+    kwargs["http_options"] = types.HttpOptions(
+        timeout=20_000,
+        retry_options=types.HttpRetryOptions(attempts=1),
+    )
     with _isolated_genai_env(settings.google_genai_use_vertexai):
         return genai.Client(**kwargs)
