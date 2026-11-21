@@ -6,6 +6,7 @@ from __future__ import annotations
 import logging
 from typing import Any, NamedTuple
 
+import httpx
 from google import genai
 from google.genai import errors as genai_errors
 from google.genai import types
@@ -93,11 +94,18 @@ def _filter_to_window_bounds(
         if isinstance(val, GroundedField):
             cleaned[field_name] = val if val.page in valid_pages else None
         elif isinstance(val, list):
-            cleaned[field_name] = [
-                item
-                for item in val
-                if not isinstance(item, GroundedField) or item.page in valid_pages
-            ]
+            kept: list[Any] = []
+            for item in val:
+                if isinstance(item, GroundedField):
+                    if item.page in valid_pages:
+                        kept.append(item)
+                elif isinstance(item, BaseModel):
+                    bounded_sub = _filter_to_window_bounds(item, type(item), valid_pages)
+                    if any(getattr(bounded_sub, k) is not None for k in type(bounded_sub).model_fields):
+                        kept.append(bounded_sub)
+                else:
+                    kept.append(item)
+            cleaned[field_name] = kept
         else:
             cleaned[field_name] = val
     return schema_cls.model_validate(cleaned)
@@ -138,7 +146,7 @@ def merge_window_extractions(
     return schema_cls.model_validate(merged)
 
 
-def _extract_response_json(response: Any, schema_cls: type[BaseModel]) -> BaseModel:
+def extract_response_json(response: Any, schema_cls: type[BaseModel]) -> BaseModel:
     """Validate finish_reason and non-empty response text before Pydantic parsing."""
     candidates = getattr(response, "candidates", None) or []
     if candidates:
@@ -146,13 +154,16 @@ def _extract_response_json(response: Any, schema_cls: type[BaseModel]) -> BaseMo
         if any(bad in finish_reason.upper() for bad in ("SAFETY", "RECITATION", "MAX_TOKENS", "BLOCK")):
             raise GeminiParseError(f"Gemini generation halted with finish_reason={finish_reason!r}")
 
-    raw_text = getattr(response, "text", None)
+    raw_text = getattr(response, "text", None) or ""
     if not isinstance(raw_text, str) or not raw_text.strip():
         raise GeminiParseError("Gemini returned an empty response payload.")
     try:
         return schema_cls.model_validate_json(raw_text)
     except Exception as exc:
         raise GeminiParseError(f"Gemini response failed {schema_cls.__name__} validation: {exc}") from exc
+
+
+_extract_response_json = extract_response_json
 
 
 async def _generate_with_5xx_fallback(
@@ -162,7 +173,7 @@ async def _generate_with_5xx_fallback(
     config: types.GenerateContentConfig,
 ) -> tuple[Any, str]:
     """Call Gemini, failing over to fallback models only on transient 5xx/503 ServerError."""
-    last_error: genai_errors.ServerError | None = None
+    last_error: Exception | None = None
     for idx, model in enumerate(candidate_models):
         try:
             response = await client.aio.models.generate_content(
@@ -171,17 +182,19 @@ async def _generate_with_5xx_fallback(
                 config=config,
             )
             return response, model
-        except genai_errors.ServerError as exc:
+        except (genai_errors.ServerError, httpx.TimeoutException, TimeoutError) as exc:
             last_error = exc
             if idx + 1 < len(candidate_models):
                 log.warning(
-                    "Gemini model %s returned ServerError (%s); failing over to %s",
+                    "Gemini model %s failed (%s); failing over to %s",
                     model,
                     exc,
                     candidate_models[idx + 1],
                 )
     assert last_error is not None
-    raise last_error
+    if isinstance(last_error, genai_errors.ServerError):
+        raise last_error
+    raise GeminiParseError(f"All Gemini models timed out: {last_error}") from last_error
 
 
 async def parse_document_pages(
@@ -254,28 +267,36 @@ def extract_clauses_for_db(
         raise ValueError("common_name exceeds String(128) DB limit.")
 
     clauses: list[dict[str, Any]] = []
+
+    def _append_clause(section_id: str, gf: GroundedField[Any]) -> None:
+        if len(section_id) > 64:
+            raise ValueError(f"section_id {section_id!r} exceeds String(64) DB limit.")
+        if gf.page < 1 or len(gf.box_2d) != 4 or not gf.verbatim_text.strip():
+            raise ValueError(f"Invalid GroundedField bounds in {section_id!r}.")
+        clauses.append(
+            {
+                "doc_id": doc_id,
+                "doc_type": doc_type,
+                "reg_no": reg_no,
+                "common_name": common_name,
+                "page_number": gf.page,
+                "section_id": section_id,
+                "verbatim_text": gf.verbatim_text,
+                "normalized_value": None if gf.value is None else str(gf.value),
+                "box_2d": list(gf.box_2d),
+            }
+        )
+
     for field_name in type(extraction).model_fields:
         val = getattr(extraction, field_name)
         items = val if isinstance(val, list) else ([val] if isinstance(val, GroundedField) else [])
         for idx, item in enumerate(items, start=1):
-            if not isinstance(item, GroundedField):
-                continue
-            section_id = f"{field_name}_{idx}" if isinstance(val, list) else field_name
-            if len(section_id) > 64:
-                raise ValueError(f"section_id {section_id!r} exceeds String(64) DB limit.")
-            if item.page < 1 or len(item.box_2d) != 4 or not item.verbatim_text.strip():
-                raise ValueError(f"Invalid GroundedField bounds in {section_id!r}.")
-            clauses.append(
-                {
-                    "doc_id": doc_id,
-                    "doc_type": doc_type,
-                    "reg_no": reg_no,
-                    "common_name": common_name,
-                    "page_number": item.page,
-                    "section_id": section_id,
-                    "verbatim_text": item.verbatim_text,
-                    "normalized_value": None if item.value is None else str(item.value),
-                    "box_2d": list(item.box_2d),
-                }
-            )
+            if isinstance(item, GroundedField):
+                _append_clause(f"{field_name}_{idx}" if isinstance(val, list) else field_name, item)
+            elif isinstance(item, BaseModel):
+                for sub_name in type(item).model_fields:
+                    sub_val = getattr(item, sub_name)
+                    if isinstance(sub_val, GroundedField):
+                        _append_clause(f"{field_name}_{idx}_{sub_name}", sub_val)
+
     return clauses
