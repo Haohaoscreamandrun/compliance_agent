@@ -88,8 +88,8 @@ services:
 
 networks:
   db_internal_net:
+    # Separate bridge network (no internal: true so host loopback 127.0.0.1:5432 port binding works for local dev)
     driver: bridge
-    internal: true
   app_net:
     driver: bridge
 
