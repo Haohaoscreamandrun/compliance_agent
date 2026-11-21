@@ -14,7 +14,27 @@
   --border-subtle-light: #d9e2ec;
   --border-subtle-dark: #2d3748;
   --accent-light: #0056b3;
-  --accent-dark: #4dabf7;
+  --accent-dark: #6cb6ff;
+
+  --status-danger-fg-light: #b71c1c;
+  --status-danger-fg-dark: #ff8a80;
+  --status-danger-bg-light: rgba(183, 28, 28, 0.12);
+  --status-danger-bg-dark: rgba(255, 138, 128, 0.16);
+
+  --status-warn-fg-light: #a63c00;
+  --status-warn-fg-dark: #ffb74d;
+  --status-warn-bg-light: rgba(166, 60, 0, 0.12);
+  --status-warn-bg-dark: rgba(255, 183, 77, 0.16);
+
+  --status-info-fg-light: #0d47a1;
+  --status-info-fg-dark: #90caf9;
+  --status-info-bg-light: rgba(13, 71, 161, 0.12);
+  --status-info-bg-dark: rgba(144, 202, 249, 0.16);
+
+  --status-ok-fg-light: #1b5e20;
+  --status-ok-fg-dark: #81c784;
+  --status-ok-bg-light: rgba(27, 94, 32, 0.12);
+  --status-ok-bg-dark: rgba(129, 199, 132, 0.16);
 
   --surface-bg: var(--surface-bg-light);
   --surface-card: var(--surface-card-light);
@@ -22,6 +42,22 @@
   --text-muted: var(--text-muted-light);
   --border-subtle: var(--border-subtle-light);
   --accent-color: var(--accent-light);
+  --status-danger-fg: var(--status-danger-fg-light);
+  --status-danger-bg: var(--status-danger-bg-light);
+  --status-warn-fg: var(--status-warn-fg-light);
+  --status-warn-bg: var(--status-warn-bg-light);
+  --status-info-fg: var(--status-info-fg-light);
+  --status-info-bg: var(--status-info-bg-light);
+  --status-ok-fg: var(--status-ok-fg-light);
+  --status-ok-bg: var(--status-ok-bg-light);
+
+  /* Keep Angular Material M3 surface/primary tokens aligned with light/dark mode */
+  --mat-sys-surface: var(--surface-card);
+  --mat-sys-on-surface: var(--text-primary);
+  --mat-sys-primary: var(--accent-color);
+  --mat-sys-on-primary: light-dark(#ffffff, #0b1929);
+  --mat-sys-outline: var(--border-subtle);
+  --mat-sys-outline-variant: var(--border-subtle);
 
   @media (prefers-color-scheme: dark) {
     --surface-bg: var(--surface-bg-dark);
@@ -30,6 +66,14 @@
     --text-muted: var(--text-muted-dark);
     --border-subtle: var(--border-subtle-dark);
     --accent-color: var(--accent-dark);
+    --status-danger-fg: var(--status-danger-fg-dark);
+    --status-danger-bg: var(--status-danger-bg-dark);
+    --status-warn-fg: var(--status-warn-fg-dark);
+    --status-warn-bg: var(--status-warn-bg-dark);
+    --status-info-fg: var(--status-info-fg-dark);
+    --status-info-bg: var(--status-info-bg-dark);
+    --status-ok-fg: var(--status-ok-fg-dark);
+    --status-ok-bg: var(--status-ok-bg-dark);
   }
 
   @supports (color: light-dark(white, black)) {
@@ -39,6 +83,14 @@
     --text-muted: light-dark(var(--text-muted-light), var(--text-muted-dark));
     --border-subtle: light-dark(var(--border-subtle-light), var(--border-subtle-dark));
     --accent-color: light-dark(var(--accent-light), var(--accent-dark));
+    --status-danger-fg: light-dark(var(--status-danger-fg-light), var(--status-danger-fg-dark));
+    --status-danger-bg: light-dark(var(--status-danger-bg-light), var(--status-danger-bg-dark));
+    --status-warn-fg: light-dark(var(--status-warn-fg-light), var(--status-warn-fg-dark));
+    --status-warn-bg: light-dark(var(--status-warn-bg-light), var(--status-warn-bg-dark));
+    --status-info-fg: light-dark(var(--status-info-fg-light), var(--status-info-fg-dark));
+    --status-info-bg: light-dark(var(--status-info-bg-light), var(--status-info-bg-dark));
+    --status-ok-fg: light-dark(var(--status-ok-fg-light), var(--status-ok-fg-dark));
+    --status-ok-bg: light-dark(var(--status-ok-bg-light), var(--status-ok-bg-dark));
   }
 }
 

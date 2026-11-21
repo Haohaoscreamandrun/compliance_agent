@@ -1,0 +1,112 @@
+<section class="audit-panel" aria-label="合規審查結果">
+  @if (loading()) {
+    <div class="loading-box" role="status">
+      <p>正在執行 Two-Phase Copilot 合規審查（MOA 查詢 + Cascade Diff）…</p>
+      <progress aria-label="合規審查進行中"></progress>
+    </div>
+  }
+
+  @if (errorMessage(); as err) {
+    <div class="alert alert-error" role="alert">{{ err }}</div>
+  }
+
+  @if (report(); as r) {
+    <header class="report-header">
+      <div>
+        <h2 class="report-title">
+          {{ r.reg_no }}
+          @if (r.product_name_zh) {
+            <span>— {{ r.product_name_zh }}</span>
+          }
+          @if (r.product_name_en) {
+            <span lang="en" class="en-sub">({{ r.product_name_en }})</span>
+          }
+        </h2>
+        <span class="overall-badge" [attr.data-status]="r.overall_status">
+          {{ overallLabel(r.overall_status) }}
+        </span>
+      </div>
+      @if (r.msds_doc_id_used) {
+        <span class="meta-chip">MSDS: {{ r.msds_doc_id_used }}</span>
+      }
+    </header>
+
+    @if (r.moa_snapshot_stale || r.audit_warnings.length > 0) {
+      <div class="alert alert-warn" role="status">
+        @if (r.moa_snapshot_stale) {
+          <p>MOA API 暫時無法連線，已使用資料庫快取紀錄。</p>
+        }
+        @for (warn of r.audit_warnings; track warn + ':' + $index) {
+          <p lang="en">{{ warn }}</p>
+        }
+      </div>
+    }
+
+    <div class="summary-grid">
+      <p class="summary-zh" lang="zh-Hant">{{ r.executive_summary_zh }}</p>
+      <p class="summary-en" lang="en">{{ r.executive_summary_en }}</p>
+    </div>
+
+    @if (r.checklist_items.length === 0) {
+      <p class="all-clear">目前無標示差異項目。</p>
+    } @else {
+      <div tabindex="0" role="region" aria-labelledby="checklist-caption" class="table-wrapper">
+        <table>
+          <caption id="checklist-caption">標籤更新檢查清單 ({{ r.checklist_items.length }} 項)</caption>
+          <thead>
+            <tr>
+              <th scope="col">欄位名稱</th>
+              <th scope="col">狀態</th>
+              <th scope="col">現行標示</th>
+              <th scope="col">建議 / 新值</th>
+              <th scope="col">座標引用</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (item of r.checklist_items; track item.field_name + ':' + $index) {
+              <tr>
+                <th scope="row">{{ item.field_name }}</th>
+                <td>
+                  <span class="status-pill" [attr.data-status]="item.action_status">
+                    {{ statusLabel(item.action_status) }}
+                  </span>
+                </td>
+                <td class="cell-value">{{ item.current_label_value }}</td>
+                <td class="cell-value">
+                  <div>{{ item.recommended_new_value }}</div>
+                  <small class="rationale" lang="en">{{ item.rationale }}</small>
+                </td>
+                <td class="citations-cell">
+                  <div class="citations-list">
+                    @if (item.current_label_citation; as lc) {
+                      <button
+                        type="button"
+                        class="cite-btn cite-label"
+                        [attr.aria-label]="'檢視「' + item.field_name + '」標籤第 ' + lc.page + ' 頁引用'"
+                        [title]="lc.doc_id + ' P' + lc.page"
+                        (click)="selectCitation.emit(lc)"
+                      >
+                        標籤 P{{ lc.page }}
+                      </button>
+                    }
+                    @for (sc of item.supporting_citations; track sc.doc_id + ':' + sc.page + ':' + $index) {
+                      <button
+                        type="button"
+                        class="cite-btn cite-support"
+                        [attr.aria-label]="'檢視「' + item.field_name + '」佐證文件 ' + sc.doc_id + ' 第 ' + sc.page + ' 頁引用'"
+                        [title]="sc.doc_id + ' P' + sc.page"
+                        (click)="selectCitation.emit(sc)"
+                      >
+                        佐證 P{{ sc.page }}
+                      </button>
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+</section>

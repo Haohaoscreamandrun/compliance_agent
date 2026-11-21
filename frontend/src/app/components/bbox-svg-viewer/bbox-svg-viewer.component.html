@@ -1,0 +1,72 @@
+<section class="viewer-card" aria-label="文件座標檢視器">
+  <header class="viewer-toolbar">
+    <div class="viewer-title">
+      <strong>{{ docLabel() || docId() || '尚未選取文件' }}</strong>
+      @if (docId()) {
+        <span class="page-indicator">第 {{ pageNumber() }} / {{ totalPages() }} 頁</span>
+      }
+    </div>
+    @if (docId() && totalPages() > 1) {
+      <div class="page-controls">
+        <button type="button" class="nav-btn" [disabled]="pageNumber() <= 1" (click)="prevPage()">
+          上一頁
+        </button>
+        <button type="button" class="nav-btn" [disabled]="pageNumber() >= totalPages()" (click)="nextPage()">
+          下一頁
+        </button>
+      </div>
+    }
+  </header>
+
+  @if (citation(); as activeCite) {
+    @if (activeCite.doc_id === docId()) {
+      <p class="quote-banner">
+        <span class="quote-label">引用原文 (第 {{ activeCite.page }} 頁)：</span>
+        <q>{{ activeCite.verbatim_quote }}</q>
+      </p>
+    }
+  }
+
+  @if (imageUrl(); as src) {
+    @if (imageError()) {
+      <div class="empty-viewer" role="alert">
+        <p>無法載入頁面影像（第 {{ pageNumber() }} 頁）。請確認後端服務與文件儲存狀態。</p>
+      </div>
+    } @else {
+      <div class="viewer-stage">
+        <img
+          class="page-image"
+          [src]="src"
+          [width]="naturalWidth()"
+          [height]="naturalHeight()"
+          [alt]="docLabel() || '合規文件頁面'"
+          fetchpriority="high"
+          (load)="onImageLoad($event)"
+          (error)="onImageError()"
+        />
+        <svg
+          class="bbox-overlay"
+          role="img"
+          [attr.aria-hidden]="activeBoxes().length === 0 ? 'true' : null"
+          [attr.aria-label]="svgAriaLabel()"
+          viewBox="0 0 1000 1000"
+          preserveAspectRatio="none"
+        >
+          @for (box of activeBoxes(); track $index) {
+            <rect
+              class="bbox-rect"
+              [attr.x]="box[1]"
+              [attr.y]="box[0]"
+              [attr.width]="box[3] > box[1] ? box[3] - box[1] : 0"
+              [attr.height]="box[2] > box[0] ? box[2] - box[0] : 0"
+            />
+          }
+        </svg>
+      </div>
+    }
+  } @else {
+    <div class="empty-viewer">
+      <p>點擊左側檢查項目的引用按鈕，即可於此定位對應頁面與座標框。</p>
+    </div>
+  }
+</section>
