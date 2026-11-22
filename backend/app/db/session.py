@@ -20,7 +20,8 @@ from app.db.models import Base
 
 def build_async_engine(settings: Settings) -> AsyncEngine:
     """Create an async SQLAlchemy engine using the safe URL.create() builder."""
-    connect_args = {"ssl": "require"} if settings.postgres_ssl else {}
+    use_ssl = settings.postgres_ssl or "sslmode=require" in settings.database_url
+    connect_args = {"ssl": "require"} if use_ssl else {}
     return create_async_engine(
         settings.sqlalchemy_database_url,
         pool_pre_ping=True,
