@@ -1,0 +1,124 @@
+<mat-card appearance="outlined" class="audit-panel" aria-label="合規審查結果">
+  @if (loading()) {
+    <div class="loading-box" role="status">
+      <p>正在執行 Two-Phase Copilot 合規審查（MOA 查詢 + Cascade Diff）…</p>
+      <mat-progress-bar mode="indeterminate" aria-label="合規審查進行中"></mat-progress-bar>
+    </div>
+  }
+
+  @if (errorMessage(); as err) {
+    <div class="alert alert-error" role="alert">{{ err }}</div>
+  }
+
+  @if (report(); as r) {
+    <header class="report-header">
+      <div>
+        <h2 class="report-title">
+          {{ r.reg_no }}
+          @if (r.product_name_zh) {
+            <span>— {{ r.product_name_zh }}</span>
+          }
+          @if (r.product_name_en) {
+            <span lang="en" class="en-sub">({{ r.product_name_en }})</span>
+          }
+        </h2>
+        <span class="overall-badge" [attr.data-status]="r.overall_status">
+          {{ overallLabel(r.overall_status) }}
+        </span>
+      </div>
+      @if (r.msds_doc_id_used) {
+        <mat-chip-set aria-label="審查使用文件">
+          <mat-chip>MSDS: {{ r.msds_doc_id_used }}</mat-chip>
+        </mat-chip-set>
+      }
+    </header>
+
+    @if (r.moa_snapshot_stale || r.audit_warnings.length > 0) {
+      <div class="alert alert-warn" role="status">
+        @if (r.moa_snapshot_stale) {
+          <p>MOA API 暫時無法連線，已使用資料庫快取紀錄。</p>
+        }
+        @for (warn of r.audit_warnings; track warn + ':' + $index) {
+          <p lang="en">{{ warn }}</p>
+        }
+      </div>
+    }
+
+    <div class="summary-grid">
+      <p class="summary-zh" lang="zh-Hant">{{ r.executive_summary_zh }}</p>
+      <p class="summary-en" lang="en">{{ r.executive_summary_en }}</p>
+    </div>
+
+    @if (r.checklist_items.length === 0) {
+      <p class="all-clear">目前無標示差異項目。</p>
+    } @else {
+      <div tabindex="0" role="region" aria-labelledby="checklist-caption" class="table-wrapper">
+        <table mat-table [dataSource]="r.checklist_items">
+          <caption id="checklist-caption">標籤更新檢查清單 ({{ r.checklist_items.length }} 項)</caption>
+
+          <ng-container matColumnDef="field_name">
+            <th mat-header-cell *matHeaderCellDef scope="col">欄位名稱</th>
+            <th mat-cell *matCellDef="let item" scope="row">{{ item.field_name }}</th>
+          </ng-container>
+
+          <ng-container matColumnDef="action_status">
+            <th mat-header-cell *matHeaderCellDef scope="col">狀態</th>
+            <td mat-cell *matCellDef="let item">
+              <span class="status-pill" [attr.data-status]="item.action_status">
+                {{ statusLabel(item.action_status) }}
+              </span>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="current_label_value">
+            <th mat-header-cell *matHeaderCellDef scope="col">現行標示</th>
+            <td mat-cell *matCellDef="let item" class="cell-value">{{ item.current_label_value }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="recommended_new_value">
+            <th mat-header-cell *matHeaderCellDef scope="col">建議 / 新值</th>
+            <td mat-cell *matCellDef="let item" class="cell-value">
+              <div>{{ item.recommended_new_value }}</div>
+              <small class="rationale" lang="en">{{ item.rationale }}</small>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="citations">
+            <th mat-header-cell *matHeaderCellDef scope="col">座標引用</th>
+            <td mat-cell *matCellDef="let item" class="citations-cell">
+              <div class="citations-list">
+                @if (item.current_label_citation; as lc) {
+                  <button
+                    type="button"
+                    mat-stroked-button
+                    class="cite-btn cite-label"
+                    [attr.aria-label]="'檢視「' + item.field_name + '」標籤第 ' + lc.page + ' 頁引用'"
+                    [title]="lc.doc_id + ' P' + lc.page"
+                    (click)="selectCitation.emit(lc)"
+                  >
+                    標籤 P{{ lc.page }}
+                  </button>
+                }
+                @for (sc of item.supporting_citations; track sc.doc_id + ':' + sc.page + ':' + $index) {
+                  <button
+                    type="button"
+                    mat-stroked-button
+                    class="cite-btn cite-support"
+                    [attr.aria-label]="'檢視「' + item.field_name + '」佐證文件 ' + sc.doc_id + ' 第 ' + sc.page + ' 頁引用'"
+                    [title]="sc.doc_id + ' P' + sc.page"
+                    (click)="selectCitation.emit(sc)"
+                  >
+                    佐證 P{{ sc.page }}
+                  </button>
+                }
+              </div>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+        </table>
+      </div>
+    }
+  }
+</mat-card>
