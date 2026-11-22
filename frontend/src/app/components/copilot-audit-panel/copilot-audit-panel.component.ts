@@ -26,6 +26,7 @@ export class CopilotAuditPanelComponent {
   readonly errorMessage = input<string | null>(null);
 
   readonly selectCitation = output<CitationRef>();
+  readonly forceRefresh = output<void>();
 
   statusLabel(status: ActionStatus): string {
     switch (status) {

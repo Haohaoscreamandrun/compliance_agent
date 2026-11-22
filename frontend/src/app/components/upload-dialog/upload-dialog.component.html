@@ -1,64 +1,118 @@
-<h2 mat-dialog-title>上傳合規審查文件</h2>
+<div class="dialog-title-row">
+  <h2 mat-dialog-title>上傳合規審查文件</h2>
+  <button
+    type="button"
+    mat-stroked-button
+    class="add-btn"
+    (click)="addEntry()"
+    [disabled]="uploading()"
+    aria-label="新增一筆上傳文件表單"
+  >
+    ＋ 新增文件
+  </button>
+</div>
 
 <form (submit)="submit($event)">
   <mat-dialog-content class="dialog-form">
-    <mat-form-field appearance="outline">
-      <mat-label>文件類型 *</mat-label>
-      <mat-select [ngModel]="docType()" (ngModelChange)="onDocTypeChange($event)" name="docType">
-        <mat-option value="label">label (產品標籤 / 原體標籤)</mat-option>
-        <mat-option value="msds">msds (GHS 安全資料表)</mat-option>
-        <mat-option value="change_cert">change_cert (LoA / MoC / Free Sale / LoO / Other)</mat-option>
-        <mat-option value="official_letter">official_letter (防檢署公文)</mat-option>
-      </mat-select>
-    </mat-form-field>
+    <div class="entries-row">
+      @for (entry of entries(); track entry.id; let idx = $index) {
+        <section class="entry-group" [attr.aria-label]="'上傳文件 #' + (idx + 1)">
+        <div class="entry-header">
+          <strong>文件 #{{ idx + 1 }}</strong>
+          @if (entry.statusMessage) {
+            <span class="entry-status" [attr.data-status]="entry.status">{{ entry.statusMessage }}</span>
+          }
+          @if (entries().length > 1) {
+            <button
+              type="button"
+              mat-button
+              (click)="removeEntry(entry.id)"
+              [disabled]="uploading()"
+            >
+              移除
+            </button>
+          }
+        </div>
 
-    <mat-form-field appearance="outline">
-      <mat-label>許可證字號（多產品 LoA/MoC 可留空；other 類型必填）</mat-label>
-      <input
-        matInput
-        type="text"
-        [ngModel]="regNo()"
-        (ngModelChange)="regNo.set($event)"
-        name="regNo"
-        placeholder="例：農藥進00569"
-      />
-    </mat-form-field>
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>文件類型 *</mat-label>
+          <mat-select
+            [ngModel]="entry.docType"
+            (ngModelChange)="onDocTypeChange(entry.id, $event)"
+            [name]="'docType_' + entry.id"
+          >
+            <mat-option value="label">label (產品標籤 / 原體標籤)</mat-option>
+            <mat-option value="msds">msds (GHS 安全資料表)</mat-option>
+            <mat-option value="change_cert">change_cert (LoA / MoC / Free Sale / LoO / Other)</mat-option>
+            <mat-option value="official_letter">official_letter (防檢署公文)</mat-option>
+          </mat-select>
+        </mat-form-field>
 
-    <mat-form-field appearance="outline">
-      <mat-label>人工備註（選填，建議用於 other 類型證明）</mat-label>
-      <input
-        matInput
-        type="text"
-        [ngModel]="manualNotes()"
-        (ngModelChange)="manualNotes.set($event)"
-        name="manualNotes"
-        placeholder="補充說明或變更目的"
-      />
-    </mat-form-field>
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>許可證字號（多產品 LoA/MoC 可留空；other 類型必填）</mat-label>
+          <input
+            matInput
+            type="text"
+            [ngModel]="entry.regNo"
+            (ngModelChange)="onFieldChange(entry.id, 'regNo', $event)"
+            [name]="'regNo_' + entry.id"
+            placeholder="例：農藥進00569"
+          />
+        </mat-form-field>
 
-    <div class="file-picker">
-      <input
-        #fileInput
-        type="file"
-        accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff"
-        class="sr-only"
-        id="upload-dialog-file"
-        (change)="onFileSelected($event)"
-      />
-      <button type="button" mat-stroked-button (click)="fileInput.click()" [disabled]="uploading()">
-        選擇 PDF 或圖片檔案 *
-      </button>
-      @if (selectedFile(); as f) {
-        <span class="file-name">{{ f.name }}</span>
-        <button type="button" mat-button (click)="clearFile()" [disabled]="uploading()">清除</button>
-      } @else {
-        <span class="file-hint">尚未選取檔案</span>
+        @if (entry.docType === 'label') {
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>包裝容量標籤（選填，多容量基準用，例：1kg / 2kg）</mat-label>
+            <input
+              matInput
+              type="text"
+              [ngModel]="entry.volumeTag"
+              (ngModelChange)="onFieldChange(entry.id, 'volumeTag', $event)"
+              [name]="'volumeTag_' + entry.id"
+              placeholder="留空則自動擷取淨重/容量"
+            />
+          </mat-form-field>
+        }
+
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>人工備註（選填，建議用於 other 類型證明）</mat-label>
+          <input
+            matInput
+            type="text"
+            [ngModel]="entry.manualNotes"
+            (ngModelChange)="onFieldChange(entry.id, 'manualNotes', $event)"
+            [name]="'manualNotes_' + entry.id"
+            placeholder="補充說明或變更目的"
+          />
+        </mat-form-field>
+
+        <div class="file-picker">
+          <input
+            #fileInput
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff"
+            class="sr-only"
+            (change)="onFileSelected(entry.id, $event)"
+          />
+          <button type="button" mat-stroked-button (click)="fileInput.click()" [disabled]="uploading()">
+            選擇 PDF 或圖片檔案 *
+          </button>
+          @if (entry.selectedFile; as f) {
+            <span class="file-name">{{ f.name }}</span>
+            <button type="button" mat-button (click)="clearFile(entry.id, fileInput)" [disabled]="uploading()">
+              清除
+            </button>
+          } @else {
+            <span class="file-hint">尚未選取檔案</span>
+          }
+        </div>
+      </section>
       }
     </div>
 
     @if (uploading()) {
       <div class="upload-progress" role="status">
-        <span>正在解析與萃取座標…</span>
+        <span>正在依序解析與萃取座標…</span>
         <mat-progress-bar mode="indeterminate" aria-label="文件解析中"></mat-progress-bar>
       </div>
     }
@@ -71,7 +125,7 @@
   <mat-dialog-actions align="end">
     <button type="button" mat-button (click)="cancel()">取消</button>
     <button type="submit" mat-flat-button [disabled]="uploading()">
-      {{ uploading() ? '解析中…' : '開始上傳與解析' }}
+      {{ uploading() ? '解析中…' : '全部上傳與解析 (' + selectedFileCount() + ')' }}
     </button>
   </mat-dialog-actions>
 </form>

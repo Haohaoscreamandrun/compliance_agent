@@ -13,10 +13,14 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatToolbarModule } from '@angular/material/toolbar';
-import { Subscription } from 'rxjs';
+import { catchError, of, Subscription, switchMap } from 'rxjs';
 
 import { BboxSvgViewerComponent } from './components/bbox-svg-viewer/bbox-svg-viewer.component';
 import { CopilotAuditPanelComponent } from './components/copilot-audit-panel/copilot-audit-panel.component';
+import {
+  EntityAliasDialogComponent,
+  EntityAliasDialogData,
+} from './components/entity-alias-dialog/entity-alias-dialog.component';
 import {
   UploadDialogComponent,
   UploadDialogData,
@@ -27,6 +31,7 @@ import {
   DocType,
   DocumentSummary,
   DocumentUploadResponse,
+  EntityAlias,
   RegistryLookupResponse,
 } from './models/compliance.models';
 import { ComplianceApiService, extractApiErrorMessage } from './services/compliance-api.service';
@@ -60,15 +65,23 @@ export class AppComponent implements OnInit {
   private readonly snackBar = inject(MatSnackBar);
 
   private docsSub?: Subscription;
+  private baselineSub?: Subscription;
   private moaSub?: Subscription;
   private auditSub?: Subscription;
 
-  // Audit & Registry state
+  // Permit, MOA & Pulled Baselines state
   readonly regNo = signal('農藥進00569');
   readonly moaSnapshot = signal<RegistryLookupResponse | null>(null);
+  readonly baselinesLoaded = signal(false);
+  readonly baselineDocs = signal<DocumentSummary[]>([]);
+  readonly baselinesLoading = signal(false);
+  readonly baselinesError = signal<string | null>(null);
+
+  // Audit Panel state (appears when audit runs)
   readonly auditReport = signal<ComplianceAuditReport | null>(null);
   readonly auditLoading = signal(false);
   readonly auditError = signal<string | null>(null);
+  readonly entityAliases = signal<EntityAlias[]>([]);
 
   // Document Library & Sidenav state (default closed)
   readonly sidenavOpen = signal(false);
@@ -92,11 +105,15 @@ export class AppComponent implements OnInit {
     for (const d of this.documents()) {
       map.set(d.doc_id, d);
     }
+    for (const d of this.baselineDocs()) {
+      map.set(d.doc_id, d);
+    }
     return map;
   });
 
   ngOnInit(): void {
     this.loadDocuments();
+    this.loadEntityAliases();
   }
 
   loadDocuments(): void {
@@ -124,22 +141,49 @@ export class AppComponent implements OnInit {
       });
   }
 
-  lookupMoa(): void {
+  loadBaselines(): void {
     const target = this.regNo().trim();
     if (!target) return;
-    this.moaSub?.unsubscribe();
+
+    this.baselinesLoading.set(true);
+    this.baselinesError.set(null);
+    this.baselinesLoaded.set(true);
     this.moaSnapshot.set(null);
+    this.auditReport.set(null);
     this.auditError.set(null);
-    this.moaSub = this.api
+
+    this.moaSub?.unsubscribe();
+    this.baselineSub?.unsubscribe();
+    this.baselineSub = this.api
       .lookupRegistry(target)
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      .pipe(
+        catchError(() => of(null)),
+        switchMap((snap) => {
+          if (snap) {
+            this.moaSnapshot.set(snap);
+          }
+          return this.api.listDocuments({
+            reg_no: target,
+            is_active_baseline: true,
+            include_shared_certs: true,
+            limit: 50,
+          });
+        }),
+        takeUntilDestroyed(this.destroyRef),
+      )
       .subscribe({
-        next: (snap) => this.moaSnapshot.set(snap),
-        error: (err) => this.auditError.set(extractApiErrorMessage(err, 'MOA 查詢失敗')),
+        next: (docs) => {
+          this.baselineDocs.set(docs);
+          this.baselinesLoading.set(false);
+        },
+        error: (err) => {
+          this.baselinesError.set(extractApiErrorMessage(err, '載入基準文件失敗'));
+          this.baselinesLoading.set(false);
+        },
       });
   }
 
-  runAudit(): void {
+  runAudit(forceRefresh = false): void {
     const target = this.regNo().trim();
     if (!target) return;
     this.auditSub?.unsubscribe();
@@ -147,13 +191,14 @@ export class AppComponent implements OnInit {
     this.auditLoading.set(true);
     this.auditError.set(null);
     this.auditSub = this.api
-      .runComplianceAudit(target)
+      .runComplianceAudit(target, forceRefresh)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (report) => {
           this.auditReport.set(report);
           this.auditLoading.set(false);
           this.loadDocuments();
+          this.promptUnconfirmedBilingualEntity(report);
         },
         error: (err) => {
           this.auditError.set(
@@ -188,33 +233,121 @@ export class AppComponent implements OnInit {
       .toggleBaseline(doc.doc_id, !doc.is_active_baseline)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: () => this.loadDocuments(),
+        next: () => {
+          this.loadDocuments();
+          if (this.baselinesLoaded()) {
+            this.loadBaselines();
+          }
+        },
         error: (err) => this.docsError.set(extractApiErrorMessage(err, '切換基準文件失敗')),
       });
   }
 
   openUploadModal(): void {
-    const ref = this.dialog.open<UploadDialogComponent, UploadDialogData, DocumentUploadResponse | null>(
+    const ref = this.dialog.open<
       UploadDialogComponent,
-      {
-        data: { defaultRegNo: this.regNo() },
-        width: '540px',
-        maxWidth: '94vw',
-      },
-    );
+      UploadDialogData,
+      DocumentUploadResponse[] | null
+    >(UploadDialogComponent, {
+      data: { defaultRegNo: this.regNo() },
+      width: 'auto',
+      maxWidth: '94vw',
+      panelClass: 'wide-upload-dialog',
+    });
 
     ref
       .afterClosed()
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((res) => {
-        if (!res) return;
+      .subscribe((results) => {
+        if (!results || results.length === 0) return;
         this.loadDocuments();
-        this.previewDocument(res);
-        this.snackBar.open(
-          `已上傳 ${res.doc_id}（模型：${res.model_used}，${res.page_count} 頁）`,
-          '關閉',
-          { duration: 6000 },
-        );
+        if (this.baselinesLoaded()) {
+          this.loadBaselines();
+        }
+        const latest = results[results.length - 1];
+        this.previewDocument(latest);
+        const msg =
+          results.length === 1
+            ? `已上傳 ${latest.doc_id}（模型：${latest.model_used}，${latest.page_count} 頁）`
+            : `已批次上傳 ${results.length} 份文件`;
+        this.snackBar.open(msg, '關閉', { duration: 6000 });
       });
+  }
+
+  private loadEntityAliases(): void {
+    this.api
+      .listEntityAliases()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (aliases) => this.entityAliases.set(aliases),
+        error: () => {
+          // Non-fatal on initial load
+        },
+      });
+  }
+
+  private promptUnconfirmedBilingualEntity(
+    report: ComplianceAuditReport,
+    startIndex = 0,
+  ): void {
+    const cjkRe = /[\u4e00-\u9fff]/;
+    const latinRe = /[A-Za-z]/;
+    const existing = this.entityAliases();
+
+    for (let idx = startIndex; idx < report.checklist_items.length; idx++) {
+      const item = report.checklist_items[idx];
+      if (item.category !== 'entity_contact_update') continue;
+      const a = item.current_label_value.trim();
+      const b = item.recommended_new_value.trim();
+      if (!a || !b) continue;
+
+      let zhName = '';
+      let enName = '';
+      if (cjkRe.test(a) && latinRe.test(b) && !cjkRe.test(b)) {
+        zhName = a;
+        enName = b;
+      } else if (cjkRe.test(b) && latinRe.test(a) && !cjkRe.test(a)) {
+        zhName = b;
+        enName = a;
+      } else {
+        continue;
+      }
+
+      const alreadyRecorded = existing.some(
+        (al) =>
+          al.zh_name.toLowerCase() === zhName.toLowerCase() &&
+          al.en_name.toLowerCase() === enName.toLowerCase(),
+      );
+      if (alreadyRecorded) continue;
+
+      const ref = this.dialog.open<EntityAliasDialogComponent, EntityAliasDialogData, boolean>(
+        EntityAliasDialogComponent,
+        {
+          data: { zhName, enName },
+          width: '480px',
+          maxWidth: '94vw',
+        },
+      );
+      ref
+        .afterClosed()
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe((confirmed) => {
+          if (confirmed === undefined) return;
+          this.api
+            .upsertEntityAlias(zhName, enName, confirmed)
+            .pipe(takeUntilDestroyed(this.destroyRef))
+            .subscribe({
+              next: (saved) => {
+                this.entityAliases.update((list) => [saved, ...list]);
+                if (confirmed) {
+                  this.runAudit();
+                } else {
+                  this.promptUnconfirmedBilingualEntity(report, idx + 1);
+                }
+              },
+            });
+        });
+      break;
+    }
   }
 }

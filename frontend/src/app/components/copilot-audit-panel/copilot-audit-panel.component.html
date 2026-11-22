@@ -26,11 +26,19 @@
           {{ overallLabel(r.overall_status) }}
         </span>
       </div>
-      @if (r.msds_doc_id_used) {
-        <mat-chip-set aria-label="審查使用文件">
-          <mat-chip>MSDS: {{ r.msds_doc_id_used }}</mat-chip>
-        </mat-chip-set>
-      }
+      <div class="header-actions">
+        @if (r.from_cache) {
+          <mat-chip-set aria-label="快取狀態">
+            <mat-chip>DB 快取結果</mat-chip>
+          </mat-chip-set>
+        }
+        @if (r.msds_doc_id_used) {
+          <mat-chip-set aria-label="審查使用文件">
+            <mat-chip>MSDS: {{ r.msds_doc_id_used }}</mat-chip>
+          </mat-chip-set>
+        }
+        <button type="button" mat-stroked-button (click)="forceRefresh.emit()">重新審查</button>
+      </div>
     </header>
 
     @if (r.moa_snapshot_stale || r.audit_warnings.length > 0) {

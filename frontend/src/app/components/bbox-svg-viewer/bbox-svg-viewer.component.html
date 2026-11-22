@@ -6,16 +6,40 @@
         <span class="page-indicator">第 {{ pageNumber() }} / {{ totalPages() }} 頁</span>
       }
     </div>
-    @if (docId() && totalPages() > 1) {
-      <div class="page-controls">
-        <button type="button" mat-stroked-button [disabled]="pageNumber() <= 1" (click)="prevPage()">
-          上一頁
-        </button>
-        <button type="button" mat-stroked-button [disabled]="pageNumber() >= totalPages()" (click)="nextPage()">
-          下一頁
-        </button>
-      </div>
-    }
+    <div class="viewer-controls">
+      @if (docId()) {
+        <div class="zoom-controls" aria-label="縮放與放大鏡控制">
+          <button type="button" mat-stroked-button [disabled]="zoom() <= 0.5" (click)="zoomOut()" aria-label="縮小">
+            －
+          </button>
+          <button type="button" mat-button (click)="resetZoom()" aria-label="重設縮放">
+            {{ zoomPercent() }}%
+          </button>
+          <button type="button" mat-stroked-button [disabled]="zoom() >= 4" (click)="zoomIn()" aria-label="放大">
+            ＋
+          </button>
+          <button
+            type="button"
+            mat-stroked-button
+            [class.is-active]="magnifierActive()"
+            [attr.aria-pressed]="magnifierActive()"
+            (click)="toggleMagnifier()"
+          >
+            {{ magnifierActive() ? '關閉放大鏡' : '放大鏡' }}
+          </button>
+        </div>
+      }
+      @if (docId() && totalPages() > 1) {
+        <div class="page-controls">
+          <button type="button" mat-stroked-button [disabled]="pageNumber() <= 1" (click)="prevPage()">
+            上一頁
+          </button>
+          <button type="button" mat-stroked-button [disabled]="pageNumber() >= totalPages()" (click)="nextPage()">
+            下一頁
+          </button>
+        </div>
+      }
+    </div>
   </header>
 
   @if (citation(); as activeCite) {
@@ -33,40 +57,59 @@
         <p>無法載入頁面影像（第 {{ pageNumber() }} 頁）。請確認後端服務與文件儲存狀態。</p>
       </div>
     } @else {
-      <div class="viewer-stage">
-        <img
-          class="page-image"
-          [src]="src"
-          [width]="naturalWidth()"
-          [height]="naturalHeight()"
-          [alt]="docLabel() || '合規文件頁面'"
-          fetchpriority="high"
-          (load)="onImageLoad($event)"
-          (error)="onImageError()"
-        />
-        <svg
-          class="bbox-overlay"
-          role="img"
-          [attr.aria-hidden]="activeBoxes().length === 0 ? 'true' : null"
-          [attr.aria-label]="svgAriaLabel()"
-          viewBox="0 0 1000 1000"
-          preserveAspectRatio="none"
+      <div class="viewer-scroll-container">
+        <div
+          class="viewer-stage"
+          [style.width.%]="zoom() * 100"
+          [class.magnifier-cursor]="magnifierActive()"
+          (mousemove)="onStageMouseMove($event)"
+          (mouseleave)="onStageMouseLeave()"
         >
-          @for (box of activeBoxes(); track $index) {
-            <rect
-              class="bbox-rect"
-              [attr.x]="box[1]"
-              [attr.y]="box[0]"
-              [attr.width]="box[3] > box[1] ? box[3] - box[1] : 0"
-              [attr.height]="box[2] > box[0] ? box[2] - box[0] : 0"
-            />
+          <img
+            class="page-image"
+            [src]="src"
+            [width]="naturalWidth()"
+            [height]="naturalHeight()"
+            [alt]="docLabel() || '合規文件頁面'"
+            fetchpriority="high"
+            (load)="onImageLoad($event)"
+            (error)="onImageError()"
+          />
+          <svg
+            class="bbox-overlay"
+            role="img"
+            [attr.aria-hidden]="activeBoxes().length === 0 ? 'true' : null"
+            [attr.aria-label]="svgAriaLabel()"
+            viewBox="0 0 1000 1000"
+            preserveAspectRatio="none"
+          >
+            @for (box of activeBoxes(); track $index) {
+              <rect
+                class="bbox-rect"
+                [attr.x]="box[1]"
+                [attr.y]="box[0]"
+                [attr.width]="box[3] > box[1] ? box[3] - box[1] : 0"
+                [attr.height]="box[2] > box[0] ? box[2] - box[0] : 0"
+              />
+            }
+          </svg>
+          @if (magnifierActive() && loupeVisible()) {
+            <div
+              class="magnifier-loupe"
+              aria-hidden="true"
+              [style.left.px]="loupeX() - 90"
+              [style.top.px]="loupeY() - 90"
+              [style.backgroundImage]="'url(' + src + ')'"
+              [style.backgroundSize]="stageWidthPx() * 2.5 + 'px ' + stageHeightPx() * 2.5 + 'px'"
+              [style.backgroundPosition]="-(loupeX() * 2.5 - 90) + 'px ' + -(loupeY() * 2.5 - 90) + 'px'"
+            ></div>
           }
-        </svg>
+        </div>
       </div>
     }
   } @else {
     <div class="empty-viewer">
-      <p>點擊左側檢查項目的引用按鈕，即可於此定位對應頁面與座標框。</p>
+      <p>點擊檢查項目的引用按鈕，或從基準文件/文件庫選取文件，即可於此檢視與放大定位。</p>
     </div>
   }
 </mat-card>

@@ -2,6 +2,7 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
+  align-items: center;
   gap: 0.75rem;
   min-block-size: 72px;
   height: auto;
@@ -12,6 +13,7 @@
 .brand {
   font-weight: 600;
   font-size: 1.05rem;
+  min-width: 0;
 
   small {
     font-weight: 400;
@@ -25,10 +27,11 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
+  max-inline-size: 100%;
 }
 
 .reg-field {
-  inline-size: 185px;
+  inline-size: min(195px, 100%);
   font-size: 0.85rem;
 }
 
@@ -93,10 +96,11 @@
   color: var(--text-muted);
 }
 
-.doc-filename {
+.doc-filename,
+.baseline-name {
   font-size: 0.875rem;
   font-weight: 500;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .doc-actions {
@@ -112,6 +116,7 @@
   padding: 1rem;
   max-inline-size: 1680px;
   margin-inline: auto;
+  box-sizing: border-box;
 }
 
 .moa-strip {
@@ -122,18 +127,63 @@
   gap: 0.75rem;
   padding: 0.75rem 1rem;
   font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+.baselines-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+}
+
+.baselines-header h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.baseline-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+  gap: 0.5rem;
+}
+
+.baseline-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+}
+
+.baselines-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-block-start: 0.25rem;
+  border-block-start: 1px solid var(--border-subtle);
 }
 
 .split-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(440px, 100%), 1fr));
   gap: 1rem;
   align-items: start;
 }
 
-@media (max-width: 960px) {
-  .split-grid {
-    grid-template-columns: 1fr;
+@media (max-width: 600px) {
+  .workspace {
+    padding: 0.65rem;
+  }
+
+  .toolbar-actions {
+    inline-size: 100%;
+  }
+
+  .reg-field {
+    inline-size: 100%;
   }
 }
 

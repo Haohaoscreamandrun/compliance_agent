@@ -26,6 +26,17 @@ export class BboxSvgViewerComponent {
   readonly naturalHeight = signal(1600);
   readonly imageError = signal(false);
 
+  // Zoom (0.5x to 4.0x) and hover Magnifier Loupe state
+  readonly zoom = signal(1);
+  readonly magnifierActive = signal(false);
+  readonly loupeVisible = signal(false);
+  readonly loupeX = signal(0);
+  readonly loupeY = signal(0);
+  readonly stageWidthPx = signal(600);
+  readonly stageHeightPx = signal(800);
+
+  readonly zoomPercent = computed(() => Math.round(this.zoom() * 100));
+
   readonly imageUrl = computed(() => {
     const id = this.docId();
     return id ? this.api.getPageImageUrl(id, this.pageNumber()) : null;
@@ -35,6 +46,7 @@ export class BboxSvgViewerComponent {
     effect(() => {
       this.imageUrl();
       this.imageError.set(false);
+      this.loupeVisible.set(false);
     });
   }
 
@@ -64,6 +76,44 @@ export class BboxSvgViewerComponent {
 
   onImageError(): void {
     this.imageError.set(true);
+  }
+
+  zoomIn(): void {
+    this.zoom.update((z) => Math.min(4, +(z + 0.25).toFixed(2)));
+  }
+
+  zoomOut(): void {
+    this.zoom.update((z) => Math.max(0.5, +(z - 0.25).toFixed(2)));
+  }
+
+  resetZoom(): void {
+    this.zoom.set(1);
+  }
+
+  toggleMagnifier(): void {
+    this.magnifierActive.update((v) => !v);
+    if (!this.magnifierActive()) {
+      this.loupeVisible.set(false);
+    }
+  }
+
+  onStageMouseMove(event: MouseEvent): void {
+    if (!this.magnifierActive()) return;
+    const stage = event.currentTarget as HTMLElement;
+    const rect = stage.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+
+    const relX = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
+    const relY = Math.max(0, Math.min(rect.height, event.clientY - rect.top));
+    this.stageWidthPx.set(rect.width);
+    this.stageHeightPx.set(rect.height);
+    this.loupeX.set(relX);
+    this.loupeY.set(relY);
+    this.loupeVisible.set(true);
+  }
+
+  onStageMouseLeave(): void {
+    this.loupeVisible.set(false);
   }
 
   prevPage(): void {

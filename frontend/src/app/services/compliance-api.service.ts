@@ -7,12 +7,15 @@ import {
   DocType,
   DocumentSummary,
   DocumentUploadResponse,
+  EntityAlias,
   RegistryLookupResponse,
 } from '../models/compliance.models';
 
 export interface DocumentFilterParams {
   reg_no?: string;
   doc_type?: DocType | '';
+  is_active_baseline?: boolean;
+  include_shared_certs?: boolean;
   common_name?: string;
   product_internal_code?: string;
   limit?: number;
@@ -38,6 +41,12 @@ export class ComplianceApiService {
     if (filters.doc_type) {
       params = params.set('doc_type', filters.doc_type);
     }
+    if (filters.is_active_baseline !== undefined) {
+      params = params.set('is_active_baseline', String(filters.is_active_baseline));
+    }
+    if (filters.include_shared_certs !== undefined) {
+      params = params.set('include_shared_certs', String(filters.include_shared_certs));
+    }
     if (filters.common_name?.trim()) {
       params = params.set('common_name', filters.common_name.trim());
     }
@@ -53,10 +62,30 @@ export class ComplianceApiService {
     return this.http.get<DocumentSummary[]>(`${this.baseUrl}/documents`, { params });
   }
 
+  checkDocumentExists(
+    filename: string,
+    docType: DocType,
+    regNo?: string,
+  ): Observable<{ exists: boolean; doc_id: string | null }> {
+    let params = new HttpParams().set('filename', filename).set('doc_type', docType);
+    if (regNo?.trim()) {
+      params = params.set('reg_no', regNo.trim());
+    }
+    return this.http.get<{ exists: boolean; doc_id: string | null }>(
+      `${this.baseUrl}/documents/exists`,
+      { params },
+    );
+  }
+
   uploadDocument(
     file: File,
     docType: DocType,
-    options: { reg_no?: string; manual_notes?: string } = {},
+    options: {
+      reg_no?: string;
+      volume_tag?: string;
+      manual_notes?: string;
+      force_reparse?: boolean;
+    } = {},
   ): Observable<DocumentUploadResponse> {
     const formData = new FormData();
     formData.append('file', file);
@@ -64,8 +93,14 @@ export class ComplianceApiService {
     if (options.reg_no?.trim()) {
       formData.append('reg_no', options.reg_no.trim());
     }
+    if (options.volume_tag?.trim()) {
+      formData.append('volume_tag', options.volume_tag.trim());
+    }
     if (options.manual_notes?.trim()) {
       formData.append('manual_notes', options.manual_notes.trim());
+    }
+    if (options.force_reparse) {
+      formData.append('force_reparse', 'true');
     }
     return this.http.post<DocumentUploadResponse>(`${this.baseUrl}/documents/upload`, formData);
   }
@@ -81,11 +116,25 @@ export class ComplianceApiService {
     return `${this.baseUrl}/documents/${encodeURIComponent(docId)}/pages/${pageNumber}/image`;
   }
 
-  runComplianceAudit(regNo: string): Observable<ComplianceAuditReport> {
+  runComplianceAudit(regNo: string, forceRefresh = false): Observable<ComplianceAuditReport> {
+    const params = forceRefresh ? new HttpParams().set('force_refresh', 'true') : undefined;
     return this.http.post<ComplianceAuditReport>(
       `${this.baseUrl}/copilot/audit/${encodeURIComponent(regNo.trim())}`,
       {},
+      { params },
     );
+  }
+
+  listEntityAliases(): Observable<EntityAlias[]> {
+    return this.http.get<EntityAlias[]>(`${this.baseUrl}/entity-aliases`);
+  }
+
+  upsertEntityAlias(zhName: string, enName: string, confirmed: boolean): Observable<EntityAlias> {
+    return this.http.post<EntityAlias>(`${this.baseUrl}/entity-aliases`, {
+      zh_name: zhName,
+      en_name: enName,
+      confirmed,
+    });
   }
 }
 
