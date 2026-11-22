@@ -50,6 +50,13 @@ class Settings(BaseSettings):
     postgres_db: str = Field(default="compliance_db")
     postgres_host: str = Field(default="127.0.0.1")
     postgres_port: int = Field(default=5432, ge=1, le=65535)
+    postgres_ssl: bool = Field(default=False)
+
+    # --- 2b. Cloudflare R2 Object Storage (optional; local disk used when r2_bucket is empty) ---
+    r2_endpoint_url: str = Field(default="")
+    r2_bucket: str = Field(default="")
+    r2_access_key_id: str = Field(default="")
+    r2_secret_access_key: str = Field(default="")
 
     # --- 3. Taiwan MOA EIR027 OpenData API ---
     moa_api_base_url: str = Field(

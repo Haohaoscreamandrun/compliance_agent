@@ -25,6 +25,32 @@ from app.services.tools import CopilotToolset
 router = APIRouter(prefix="/api/copilot", tags=["copilot"])
 
 
+@router.get("/audit/{reg_no}", response_model=ComplianceAuditReport)
+async def get_cached_audit_report(
+    reg_no: str,
+    session: AsyncSession = Depends(get_db_session),
+) -> ComplianceAuditReport:
+    """Read-only endpoint returning the latest PostgreSQL-cached audit report for `reg_no`."""
+    try:
+        canon_reg = validate_reg_no(reg_no)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    cached = (
+        await session.execute(
+            select(AuditReportCache)
+            .where(AuditReportCache.reg_no == canon_reg)
+            .order_by(AuditReportCache.created_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if not isinstance(cached, AuditReportCache):
+        raise HTTPException(status_code=404, detail=f"No cached audit report found for '{canon_reg}'.")
+    report = ComplianceAuditReport.model_validate(cached.report_json)
+    report.from_cache = True
+    return report
+
+
 async def _compute_audit_cache_key(
     session: AsyncSession,
     canon_reg: str,

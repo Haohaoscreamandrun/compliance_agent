@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Literal
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse
 from google.genai import errors as genai_errors
 from pydantic import BaseModel, ValidationError
@@ -25,6 +25,7 @@ from app.schemas.extraction import NotarizedCertExtraction, ProductLabelExtracti
 from app.services.cascade_diff import score_matching_cert_product, validate_reg_no
 from app.services.parser import GeminiParseError, extract_clauses_for_db, parse_document_pages
 from app.services.preprocessor import preprocess_upload_in_memory, validate_doc_id
+from app.services.storage import PageStorage
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
@@ -188,6 +189,7 @@ async def upload_document(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    storage = PageStorage(settings)
     committed = False
     try:
         try:
@@ -200,6 +202,8 @@ async def upload_document(
             )
         except (GeminiParseError, genai_errors.APIError) as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+        await asyncio.to_thread(storage.save_pages, doc_id, pages)
 
         extracted_dict = parse_res.extraction.model_dump()
         extracted_reg_gf = getattr(parse_res.extraction, "reg_no", None)
@@ -333,9 +337,7 @@ async def upload_document(
             raise
     finally:
         if not committed:
-            await asyncio.to_thread(
-                shutil.rmtree, settings.storage_dir / "pages" / doc_id, ignore_errors=True
-            )
+            await asyncio.to_thread(storage.delete_doc_pages, doc_id)
 
     return DocumentUploadResponse(
         doc_id=doc_row.doc_id,
@@ -567,6 +569,17 @@ async def get_document_page_image(
     ).scalar_one_or_none()
     if page_row is None:
         raise HTTPException(status_code=404, detail=f"Page {page_number} of '{safe_id}' not found.")
+
+    storage = PageStorage(request.app.state.settings)
+    if storage.uses_r2:
+        data = await asyncio.to_thread(storage.read_page, safe_id, page_row.image_rel_path)
+        if data is None:
+            raise HTTPException(status_code=404, detail="Page image file missing in R2.")
+        return Response(
+            content=data,
+            media_type="image/webp",
+            headers={"Cache-Control": "public, max-age=86400, immutable"},
+        )
 
     storage_root = request.app.state.settings.storage_dir.resolve()
     doc_dir = (storage_root / "pages" / safe_id).resolve()

@@ -70,3 +70,17 @@ Every compliance finding must carry exact spatial provenance (`[doc_id, page, bo
 * **Trade-offs & Mitigations:**
   * *Paid-Tier API Requirement:* `GEMINI_API_KEY` must belong to a billing-enabled (Paid tier) Google AI Studio project (or `GOOGLE_GENAI_USE_VERTEXAI=true`) so confidential documents are excluded from model training.
   * *Page-Image Lifecycle:* While raw PDFs are processed purely in RAM, rendered `.webp` page images are stored in `{STORAGE_DIR}/pages/{doc_id}/` and served via `/api/documents/{doc_id}/pages/{page}/image` so the Angular `<svg>` overlay viewer can display the document background behind `box_2d` highlights; deleting a document via the API/UI purges its `{STORAGE_DIR}/pages/{doc_id}/` directory alongside its PostgreSQL rows.
+
+---
+
+## Decision 5 — Cloudflare Cloud-Native Deployment, Dual-Mode R2 Storage, Alembic & Hybrid Edge Auth (Component 7)
+
+* **Context:** Local `docker-compose.yml` suffices for development, but production cloud hosting on Cloudflare requires stateless container execution (ephemeral disk), managed TLS PostgreSQL, automated schema migrations, and protection of Gemini API quota.
+* **Chosen Architecture:**
+  * **Frontend & Edge Gateway (`wrangler.jsonc`, `src/worker.ts`):** Angular 19 `dist/frontend/browser` is served via **Cloudflare Workers Static Assets** (`not_found_handling: "single-page-application"`, `run_worker_first: ["/api/*"]`). `worker.ts` serves `GET /api/documents/:docId/pages/:page/image` directly from the **Cloudflare R2** `PAGES_BUCKET` binding (`Cache-Control: public, max-age=86400, immutable`) and proxies all other `/api/*` traffic to the FastAPI **Cloudflare Container** (`ComplianceBackend` Durable Object, `sleepAfter = "10m"`, `max_instances = 3`).
+  * **Dual-Mode `PageStorage` (`backend/app/services/storage.py`):** Uses local `{STORAGE_DIR}/pages/` when `R2_BUCKET` is unset (preserving zero-config `docker compose` and offline `pytest`) and Cloudflare R2 via S3 API (`boto3`) when `R2_BUCKET` + `R2_ENDPOINT_URL` are configured.
+  * **Managed PostgreSQL & Alembic (`backend/alembic/`):** Connects to **Neon Postgres** via `POSTGRES_SSL=true` (`asyncpg` `ssl="require"`) with versioned Alembic migrations run in GitHub Actions (`alembic upgrade head`) prior to `wrangler deploy`.
+  * **Hybrid Read-Only Demo + Write Gate:** `GET` endpoints (including `GET /api/copilot/audit/{reg_no}` returning PostgreSQL-cached `audit_reports` and `seed.py` demo fixtures) remain open for public read-only inspection, while `POST`/`PATCH /api/*` writes are gated by **Cloudflare Zero Trust Access** on a custom domain (with an optional `WRITE_ACCESS_TOKEN` header check in `worker.ts` for `*.workers.dev` deployments).
+* **Forfeited Alternatives:**
+  * *Cloudflare Python Workers (Pyodide):* Cannot run native C/C++ extensions (`pymupdf`) or local filesystem rendering.
+  * *Cloudflare Tunnel (`cloudflared`) to local PC:* Requires an always-on host machine and does not exercise cloud-native CI/CD, R2 object storage, or versioned database migrations.
