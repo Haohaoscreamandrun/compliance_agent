@@ -5,6 +5,7 @@ export interface Env {
   PAGES_BUCKET: R2Bucket;
   COMPLIANCE_BACKEND: DurableObjectNamespace<ComplianceBackend>;
   WRITE_ACCESS_TOKEN?: string;
+  REQUIRE_CF_ACCESS?: string;
   GEMINI_API_KEY?: string;
   POSTGRES_HOST?: string;
   POSTGRES_PORT?: string;
@@ -18,7 +19,8 @@ export interface Env {
   R2_SECRET_ACCESS_KEY?: string;
 }
 
-const PAGE_IMAGE_RE = /^\/api\/documents\/([A-Za-z0-9_-]{1,64})\/pages\/(\d+)\/image$/;
+const PAGE_IMAGE_RE = /^\/api\/documents\/([A-Za-z0-9_-]{1,64})\/pages\/([1-9]\d*)\/image$/;
+const SAFE_READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 export class ComplianceBackend extends Container<Env> {
   override defaultPort = 8000;
@@ -44,49 +46,89 @@ export class ComplianceBackend extends Container<Env> {
   }
 }
 
-function isAuthorizedWrite(request: Request, env: Env): boolean {
-  const expected = env.WRITE_ACCESS_TOKEN?.trim();
-  if (!expected) {
-    // When unset, rely on Cloudflare Zero Trust Access policy on the custom domain
-    return true;
+async function constantTimeEqual(a: string, b: string): Promise<boolean> {
+  const enc = new TextEncoder();
+  const [ha, hb] = await Promise.all([
+    crypto.subtle.digest('SHA-256', enc.encode(a)),
+    crypto.subtle.digest('SHA-256', enc.encode(b)),
+  ]);
+  const va = new Uint8Array(ha);
+  const vb = new Uint8Array(hb);
+  let diff = 0;
+  for (let i = 0; i < va.length; i++) {
+    diff |= va[i] ^ vb[i];
   }
-  const headerToken = request.headers.get('x-write-token')?.trim();
-  const bearer = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '').trim();
-  return headerToken === expected || bearer === expected;
+  return diff === 0;
+}
+
+async function isAuthorizedWrite(request: Request, env: Env): Promise<boolean> {
+  const expected = env.WRITE_ACCESS_TOKEN?.trim();
+  if (expected) {
+    const headerToken = request.headers.get('x-write-token')?.trim() ?? '';
+    const bearer = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '').trim() ?? '';
+    if (headerToken && (await constantTimeEqual(headerToken, expected))) {
+      return true;
+    }
+    if (bearer && (await constantTimeEqual(bearer, expected))) {
+      return true;
+    }
+    return false;
+  }
+  if (env.REQUIRE_CF_ACCESS === 'true') {
+    return Boolean(request.headers.get('cf-access-jwt-assertion')?.trim());
+  }
+  return true;
+}
+
+function withSecurityHeaders(response: Response): Response {
+  const headers = new Headers(response.headers);
+  headers.set('X-Content-Type-Options', 'nosniff');
+  headers.set('X-Frame-Options', 'DENY');
+  headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 }
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    const method = request.method.toUpperCase();
 
     if (url.pathname.startsWith('/api/')) {
-      if ((request.method === 'POST' || request.method === 'PATCH') && !isAuthorizedWrite(request, env)) {
-        return Response.json(
-          { detail: 'Write access requires authentication (X-Write-Token or Zero Trust Access).' },
-          { status: 401 },
+      if (!SAFE_READ_METHODS.has(method) && !(await isAuthorizedWrite(request, env))) {
+        return withSecurityHeaders(
+          Response.json(
+            { detail: 'Write access requires authentication (X-Write-Token or Zero Trust Access).' },
+            { status: 401 },
+          ),
         );
       }
 
-      if (request.method === 'GET') {
+      if (method === 'GET') {
         const match = PAGE_IMAGE_RE.exec(url.pathname);
         if (match) {
           const [, docId, page] = match;
           const obj = await env.PAGES_BUCKET.get(`pages/${docId}/page_${page}.webp`);
           if (obj) {
-            return new Response(obj.body, {
-              headers: {
-                'content-type': 'image/webp',
-                'cache-control': 'public, max-age=86400, immutable',
-              },
-            });
+            return withSecurityHeaders(
+              new Response(obj.body, {
+                headers: {
+                  'content-type': 'image/webp',
+                  'cache-control': 'public, max-age=86400, immutable',
+                },
+              }),
+            );
           }
         }
       }
 
       const container = env.COMPLIANCE_BACKEND.getByName('primary');
-      return container.fetch(request);
+      return withSecurityHeaders(await container.fetch(request));
     }
 
-    return env.ASSETS.fetch(request);
+    return withSecurityHeaders(await env.ASSETS.fetch(request));
   },
 };
