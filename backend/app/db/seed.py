@@ -7,7 +7,8 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Document, DocumentClause, MoaRegistry
+from app.db.models import AuditReportCache, Document, DocumentClause, MoaRegistry
+from app.schemas.report import ComplianceAuditReport, ComplianceChecklistItem
 from app.schemas.extraction import (
     AuthorizedProductItem,
     MsdsExtraction,
@@ -126,7 +127,51 @@ async def seed_sample_data(session: AsyncSession) -> None:
                 ):
                     session.add(DocumentClause(**clause_dict))
 
+        demo_report = ComplianceAuditReport(
+            reg_no="農藥進03225",
+            product_name_zh="美氟綜",
+            product_name_en="METAFLUMIZONE",
+            overall_status="pending_moa_approval",
+            executive_summary_zh="此為公開展示範例（農藥進03225 美氟綜）：變更證明文件之原製造廠與現行標示及農業部登記不一致，建議取得變更核准後再更新標籤。",
+            executive_summary_en="Public demo fixture (農藥進03225 METAFLUMIZONE): factory change certificate differs from current label and MOA registry; update label after MOA approval.",
+            checklist_items=[
+                ComplianceChecklistItem(
+                    field_name="國外原製造廠名稱",
+                    category="factory_source_change",
+                    action_status="pending_moa_approval",
+                    current_label_value="BASF Agricultural Solutions Brasil Ltda.",
+                    recommended_new_value="BASF SE (Ludwigshafen)",
+                    rationale="Seeded demo diff between baseline label and uploaded change certificate.",
+                )
+            ],
+            msds_doc_id_used="seed_msds_03225",
+        )
+        await session.execute(
+            insert(AuditReportCache)
+            .values(
+                reg_no="農藥進03225",
+                cache_key="seed_demo_03225",
+                report_json=demo_report.model_dump(),
+            )
+            .on_conflict_do_nothing(index_elements=["cache_key"])
+        )
+
         await session.commit()
     except Exception:
         await session.rollback()
         raise
+
+
+if __name__ == "__main__":
+    import asyncio
+    from app.config import Settings
+    from app.db.session import build_async_engine, build_session_factory, init_db_schema
+
+    async def _run() -> None:
+        engine = build_async_engine(Settings())
+        await init_db_schema(engine)
+        async with build_session_factory(engine)() as s:
+            await seed_sample_data(s)
+        await engine.dispose()
+
+    asyncio.run(_run())

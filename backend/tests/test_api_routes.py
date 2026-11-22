@@ -359,6 +359,7 @@ async def test_copilot_audit_route_errors_and_seed(
         MagicMock(scalar_one_or_none=MagicMock(return_value="seed_msds_03225_v4")),
         MagicMock(scalar_one_or_none=MagicMock(return_value="seed_cert_03225")),
         MagicMock(scalar_one_or_none=MagicMock(return_value="seed_letter_115")),
+        MagicMock(),  # AuditReportCache demo insert
     ]
     await seed_sample_data(seed_session)
     assert seed_session.add.call_count > 0
