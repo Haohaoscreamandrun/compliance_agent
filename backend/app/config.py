@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     gcp_sa_key_filename: str = Field(default="")
 
     # --- 2. PostgreSQL 16 Database ---
+    database_url: str = Field(default="")
     postgres_user: str = Field(default="compliance_app")
     postgres_password: str = Field(default="")
     postgres_db: str = Field(default="compliance_db")
@@ -106,8 +107,22 @@ class Settings(BaseSettings):
         raise ValueError("Invalid CORS_ALLOWED_ORIGINS format")
 
     @property
-    def sqlalchemy_database_url(self) -> URL:
-        """Build SQLAlchemy URL safely, escaping any special chars in POSTGRES_PASSWORD."""
+    def sqlalchemy_database_url(self) -> URL | str:
+        """Build SQLAlchemy URL from DATABASE_URL (stripped for asyncpg) or POSTGRES_* vars."""
+        raw_url = self.database_url.strip()
+        if raw_url:
+            from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+
+            if raw_url.startswith("postgresql://"):
+                raw_url = raw_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            parsed = urlparse(raw_url)
+            kept = [
+                (k, v)
+                for k, v in parse_qsl(parsed.query, keep_blank_values=True)
+                if k not in ("sslmode", "channel_binding")
+            ]
+            return urlunparse(parsed._replace(query=urlencode(kept)))
+
         user = self.postgres_user.strip()
         password = self.postgres_password
         host = self.postgres_host.strip()

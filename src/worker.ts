@@ -7,6 +7,7 @@ export interface Env {
   WRITE_ACCESS_TOKEN?: string;
   REQUIRE_CF_ACCESS?: string;
   GEMINI_API_KEY?: string;
+  DATABASE_URL?: string;
   POSTGRES_HOST?: string;
   POSTGRES_PORT?: string;
   POSTGRES_USER?: string;
@@ -32,6 +33,7 @@ export class ComplianceBackend extends Container<Env> {
       BACKEND_HOST: '0.0.0.0',
       BACKEND_PORT: '8000',
       GEMINI_API_KEY: env.GEMINI_API_KEY ?? '',
+      DATABASE_URL: env.DATABASE_URL ?? '',
       POSTGRES_HOST: env.POSTGRES_HOST ?? '',
       POSTGRES_PORT: env.POSTGRES_PORT ?? '5432',
       POSTGRES_USER: env.POSTGRES_USER ?? '',

@@ -34,7 +34,10 @@ def _resolve_url_and_ssl() -> tuple[str, bool]:
         cleaned_url = urlunparse(parsed._replace(query=urlencode(filtered)))
         return cleaned_url, use_ssl or Settings().postgres_ssl
     settings = Settings()
-    return settings.sqlalchemy_database_url.render_as_string(hide_password=False), settings.postgres_ssl
+    raw = settings.sqlalchemy_database_url
+    url_str = raw if isinstance(raw, str) else raw.render_as_string(hide_password=False)
+    use_ssl = settings.postgres_ssl or "sslmode=require" in settings.database_url
+    return url_str, use_ssl
 
 
 def run_migrations_offline() -> None:
