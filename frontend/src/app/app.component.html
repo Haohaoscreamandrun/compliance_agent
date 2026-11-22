@@ -1,5 +1,13 @@
+<div #contourHost class="contour-bg" aria-hidden="true"></div>
 <mat-toolbar class="top-bar">
-  <span class="brand">農藥標示合規審查系統 <small lang="en">Compliance Copilot</small></span>
+  <span class="brand">
+    <svg class="brand-mark" width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 2.5C7 5.5 4.5 9.5 4.5 14.2a7.5 7.5 0 0 0 15 0C19.5 9.5 17 5.5 12 2.5Z" stroke="currentColor" stroke-width="1.8" />
+      <path d="M9.2 14.3 11.2 16.3 15.2 11.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+    <span class="brand-title">農藥標示合規審查系統</span>
+    <small lang="en" class="brand-sub">Compliance Copilot</small>
+  </span>
   <div class="toolbar-actions">
     <mat-form-field appearance="outline" subscriptSizing="dynamic" class="reg-field">
       <mat-label>許可證字號</mat-label>
@@ -22,6 +30,15 @@
       [attr.aria-expanded]="sidenavOpen()"
     >
       文件庫 ({{ documents().length }})
+    </button>
+    <button
+      mat-stroked-button
+      type="button"
+      class="theme-toggle"
+      (click)="toggleTheme()"
+      [attr.aria-label]="theme() === 'light' ? '切換至深色模式' : '切換至淺色模式'"
+    >
+      {{ theme() === 'light' ? '深色' : '淺色' }}
     </button>
   </div>
 </mat-toolbar>

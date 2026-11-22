@@ -1,4 +1,15 @@
-import { Component, computed, DestroyRef, inject, OnInit, signal } from '@angular/core';
+import {
+  afterNextRender,
+  Component,
+  computed,
+  DestroyRef,
+  ElementRef,
+  inject,
+  OnInit,
+  signal,
+  viewChild,
+} from '@angular/core';
+import { background, BackgroundHandle, contour } from 'asciify-engine/kit';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -68,6 +79,32 @@ export class AppComponent implements OnInit {
   private baselineSub?: Subscription;
   private moaSub?: Subscription;
   private auditSub?: Subscription;
+  private contourBg?: BackgroundHandle;
+
+  readonly contourHost = viewChild<ElementRef<HTMLElement>>('contourHost');
+
+  constructor() {
+    afterNextRender(() => {
+      const host = this.contourHost()?.nativeElement;
+      if (!host) return;
+      this.contourBg = background(host, {
+        preset: contour,
+        palette: { light: '#6f877d', dark: '#5ec2d8' },
+        accent: '#1b6c80',
+        cursor: false,
+        lazy: false,
+        speed: 0.6,
+      });
+    });
+
+    this.destroyRef.onDestroy(() => {
+      this.contourBg?.destroy();
+      this.contourBg = undefined;
+    });
+  }
+
+  // Theme state (light default, persisted in localStorage)
+  readonly theme = signal<'light' | 'dark'>(this.readInitialTheme());
 
   // Permit, MOA & Pulled Baselines state
   readonly regNo = signal('農藥進00569');
@@ -359,6 +396,37 @@ export class AppComponent implements OnInit {
             });
         });
       break;
+    }
+  }
+
+  toggleTheme(): void {
+    const next = this.theme() === 'light' ? 'dark' : 'light';
+    this.theme.set(next);
+    this.applyTheme(next);
+    this.contourBg?.update({
+      ink: next === 'dark' ? '#5ec2d8' : '#6f877d',
+    });
+  }
+
+  private readInitialTheme(): 'light' | 'dark' {
+    try {
+      const saved = globalThis.localStorage?.getItem('compliance_theme');
+      const initial = saved === 'dark' ? 'dark' : 'light';
+      this.applyTheme(initial);
+      return initial;
+    } catch {
+      return 'light';
+    }
+  }
+
+  private applyTheme(mode: 'light' | 'dark'): void {
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-theme', mode);
+    }
+    try {
+      globalThis.localStorage?.setItem('compliance_theme', mode);
+    } catch {
+      // Ignore storage errors in restricted contexts.
     }
   }
 }

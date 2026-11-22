@@ -84,3 +84,17 @@ Every compliance finding must carry exact spatial provenance (`[doc_id, page, bo
 * **Forfeited Alternatives:**
   * *Cloudflare Python Workers (Pyodide):* Cannot run native C/C++ extensions (`pymupdf`) or local filesystem rendering.
   * *Cloudflare Tunnel (`cloudflared`) to local PC:* Requires an always-on host machine and does not exercise cloud-native CI/CD, R2 object storage, or versioned database migrations.
+
+---
+
+## Decision 6 — Production Provisioning across GitHub, Cloudflare & Neon (Component 8)
+
+* **Context:** Taking Component 7 from code to live production on `*.workers.dev` surfaced platform-specific requirements across Neon Postgres, GitHub Actions, and Cloudflare Workers/Containers/Zero Trust.
+* **Chosen Configuration:**
+  * **Neon Postgres (`production` branch):** Provisioned managed PostgreSQL with Alembic `001_initial_schema (head)` applied in CI prior to Worker deploy; `Settings.sqlalchemy_database_url` normalizes both `postgresql://` and `postgres://` to `postgresql+asyncpg://` and strips `sslmode`/`channel_binding` so `asyncpg` uses `ssl="require"` cleanly. *(Chosen over Cloudflare Hyperdrive because Hyperdrive is a connection pooler for JS Workers, whereas the Python FastAPI + `asyncpg` container manages its own SQLAlchemy pool directly over TLS.)*
+  * **GitHub Actions CI/CD (`.github/workflows/ci-cd.yml`):** Uses Node.js 22 (minimum required by `wrangler@4.166.0`), stores only CI/deploy secrets (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `DATABASE_URL`) in GitHub Secrets, and sanitizes accidental whitespace/quotes/`Bearer ` prefixes before `npx wrangler deploy`.
+  * **Cloudflare Workers Paid, R2 & `*.workers.dev`:** Upgraded account to **Workers Paid** (required by Cloudflare Containers `/containers/me`), registered a `*.workers.dev` subdomain (avoiding the need for a custom domain for either same-origin `/api/*` calls or outbound Gemini HTTPS calls), created R2 bucket `compliance-agent-pages` with scoped S3 API credentials, and scoped the CI API token to `Workers Scripts: Edit`, `Workers R2 Storage: Edit`, `Containers: Edit`, `Account Settings: Read`, and `User Details: Read`.
+  * **Runtime Secrets & Zero Trust Access:** Runtime secrets (`DATABASE_URL`, `GEMINI_API_KEY`, `R2_ENDPOINT_URL`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `REQUIRE_CF_ACCESS=true`) live in Cloudflare Worker **Variables and Secrets** (never in GitHub Secrets or git). Write protection uses **Cloudflare Zero Trust → Self-hosted → Workers** (Cloudflare One-Time PIN email allowlist), which works directly on `*.workers.dev` without needing a custom domain.
+* **Forfeited / Deferred Alternatives:**
+  * *Cloudflare Dashboard WAF Rate Limiting Rules:* Require a custom domain Zone proxied through Cloudflare and cannot target `*.workers.dev`; per-user Gemini `POST` rate limiting is deferred to a Workers `ratelimits` binding in `src/worker.ts` + `wrangler.jsonc` (Post-MVP).
+  * *Static `WRITE_ACCESS_TOKEN` for UI users:* Angular does not prompt for an API token header, so Zero Trust Access (`Cf-Access-Jwt-Assertion`) is preferred for interactive browser users while `WRITE_ACCESS_TOKEN` remains available for headless API clients.

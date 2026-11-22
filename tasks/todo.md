@@ -6,27 +6,27 @@
 - [x] **CL 1.2 (`chore(docker)`):** Add hardened `docker-compose.yml` (localhost port bindings, mandatory secret checks, healthchecks, isolated volumes).
 - [x] **CL 1.3 (`docs(arch)`):** Add `docs/intent/label-compliance-mvp.md` and `docs/decisions/ADR-001-system-decisions.md` (with rationales for forfeited choices).
 - [x] **CL 1.4 (`docs(web-audit)`):** Amend `ADR-001`, `README.md`, and `docker-compose.yml` with Modern Web Guidance findings (`<svg viewBox="0 0 1000 1000">` overlay, `fetchpriority="high"`, `@container` queries, WCAG 2.1 AA bilingual rules).
-- [ ] **Checkpoint / PR #1:** Review & merge `develop` → `main` for Component 1.
+- [x] **Checkpoint / PR #1:** Review & merge `develop` → `main` for Component 1.
 
 ## Component 2: PostgreSQL `JSONB` Schema & On-Call MOA `EIR027` Client
 
 - [x] **CL 2.0 (`chore(backend-scaffold)`):** Isolate backend packaging & container scaffold (`backend/pyproject.toml`, `backend/Dockerfile`, `backend/app/__init__.py`, `backend/app/db/__init__.py`).
 - [x] **CL 2.1 (`feat(db)`):** Add `app/config.py`, `app/db/session.py`, SQLAlchemy 2.0 `JSONB` models (`MoaRegistry`, `Document`, `DocumentPage`, `DocumentClause`), and `tests/test_db_and_config.py`.
 - [x] **CL 2.2 (`feat(moa-client)`):** Implement `app/services/moa_client.py` (on-call `PesticideData.aspx?$filter=...` + 4 sub-endpoints lookup with PostgreSQL snapshot upsert) + unit tests.
-- [ ] **Checkpoint / PR #2:** Review & merge `develop` → `main` for Component 2.
+- [x] **Checkpoint / PR #2:** Review & merge `develop` → `main` for Component 2.
 
 ## Component 3: Pre-Processing, Constrained Decoding Schemas & Prompts
 
 - [x] **CL 3.1 (`feat(schemas)`):** Implement `GroundedField[T]` Chain-of-Grounding (`verbatim_text` → `value` → `page` → `box_2d`) and 4 extraction schemas (`ProductLabelExtraction`, `MsdsExtraction`, `NotarizedCertExtraction`, `OfficialLetterExtraction`) + schema tests.
 - [x] **CL 3.2 (`feat(parser)`):** Implement `preprocessor.py` (`PyMuPDF` + `Pillow` WebP normalizer), domain prompts, and `parser.py` (interleaved page-image batching + Gemini constrained decoding).
-- [ ] **Checkpoint / PR #3:** Review & merge `develop` → `main` for Component 3.
+- [x] **Checkpoint / PR #3:** Review & merge `develop` → `main` for Component 3.
 
 ## Component 4: Deterministic Cascade Diff, Two-Phase Copilot & FastAPI Routes
 
 - [x] **CL 4.1 (`feat(diff)`):** Implement `cascade_diff.py` across Old Label, New MSDS, MOA Registry, Change Certificate, and Official Letters + unit tests.
 - [x] **CL 4.2 (`feat(copilot)`):** Implement the 4 agent tools (`tools.py`), `ComplianceAuditReport` schema, and Two-Phase Copilot (`copilot.py`) + unit tests.
 - [x] **CL 4.3 (`feat(api)`):** Wire FastAPI endpoints (`routes_registry.py`, `routes_documents.py`, `routes_copilot.py`, `main.py`) + seed fixtures.
-- [ ] **Checkpoint / PR #4:** Review & merge `develop` → `main` for Component 4.
+- [x] **Checkpoint / PR #4:** Review & merge `develop` → `main` for Component 4.
 
 ## Component 5: Angular + Angular Material UI & `<svg viewBox="0 0 1000 1000">` BBox Viewer
 
@@ -45,8 +45,22 @@
 
 - [x] **CL 7.1 (`feat(cloud-storage-db)`):** Add dual-mode `PageStorage` (local disk ↔ Cloudflare R2 S3 API), `postgres_ssl` support, Alembic migrations (`backend/alembic/`), `GET /api/copilot/audit/{reg_no}` read-only demo endpoint + seed fixture, and `ADR-001` Decision 5.
 - [x] **CL 7.2 (`feat(cloudflare-ci)`):** Add `wrangler.jsonc`, `src/worker.ts` (Static Assets + R2 edge image serving + `ComplianceBackend` Container + `WRITE_ACCESS_TOKEN` / Zero Trust hybrid), and `.github/workflows/ci-cd.yml`.
-- [ ] **Checkpoint / PR #7:** Review & merge `develop` → `main` to trigger Cloudflare deploy.
+- [x] **Checkpoint / PR #7:** Review & merge `develop` → `main` to trigger Cloudflare deploy.
+
+## Component 8: Production Cloud Provisioning (GitHub, Cloudflare & Neon)
+
+- [x] **CL 8.1 (`infra(neon)`):** Provision Neon Postgres `production` branch, run `alembic upgrade head` (`001_initial_schema`), and normalize `postgres://` + `postgresql://` URLs in `backend/app/config.py`.
+- [x] **CL 8.2 (`infra(github-ci)`):** Configure GitHub Actions secrets (`CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `DATABASE_URL`), bump CI Node.js to 22 for Wrangler 4.166.0, and sanitize deploy token formatting in `.github/workflows/ci-cd.yml`.
+- [x] **CL 8.3 (`infra(cloudflare)`):** Enable Workers Paid plan for Containers, register `*.workers.dev` subdomain, create R2 bucket `compliance-agent-pages` + S3 API token, create scoped Cloudflare deploy API token (`Workers Scripts: Edit`, `Workers R2 Storage: Edit`, `Containers: Edit`, `Account Settings: Read`, `User Details: Read`), configure Worker runtime Variables & Secrets, and attach Zero Trust Access (Self-hosted Workers + email OTP allowlist + `REQUIRE_CF_ACCESS=true`).
+
+## Component 9: Framed-Sheet UI Polish & Typography
+
+- [x] **CL 9.1 (`feat(ui)`):** Apply `design-taste-frontend` (`framed-sheet` layout, IBM Plex Sans/Mono + Noto Sans TC, SVG botanical compliance monogram), Light/Dark theme toggle (light default), opaque document library drawer, and `asciify-engine` `contour` animated backdrop with translucent workspace sheet, cards, and dialogs (`styles.scss`, `index.html`, `app.component.*`, `copilot-audit-panel.component.scss`, `bbox-svg-viewer.component.scss`, `package.json`).
+- [ ] **Checkpoint / PR #9:** Review & merge `develop` → `main` for Component 9.
 
 ## Future Enhancements (Post-MVP)
 
 - [ ] **APHIA Announcements & Chemical Assessments:** Add separate lookup/sync for `pesticide.aphia.gov.tw` official announcements (`農藥公告`), banned/restricted/carcinogen lists, and ACRI chemical risk assessments (not exposed in `EIR027`).
+- [ ] **Email / Gmail Webhook Ingestion:** Accept emails with attachments from allowlisted users (e.g. Zero Trust / owner allowlist via Gmail Pub/Sub webhook or Cloudflare Email Routing), auto-classify document type (`label` / `loa` / `msds`), parse, and store into R2 + Neon Postgres.
+- [ ] **Multi-Tenant Storage Isolation & Per-User Rate Limiting:** Partition R2 object prefixes (`orgs/{org_id}/...`) and Postgres rows by user/organization using verified Zero Trust identity (`Cf-Access-Authenticated-User-Email` / JWT), and enforce per-user Gemini `POST` rate limits in `src/worker.ts` via Cloudflare Workers `ratelimits` binding (or Durable Object/DB quota).
+- [ ] **Baseline File Archive & Download by `reg_no` with TTL Cleanup:** Persist original uploaded files in R2, expose download endpoints for baseline files per `reg_no`, and automatically expire non-baseline / non-latest files via R2 Lifecycle Rules or scheduled cleanup.
