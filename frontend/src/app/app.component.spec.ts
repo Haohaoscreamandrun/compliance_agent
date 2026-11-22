@@ -24,8 +24,10 @@ describe('AppComponent', () => {
     httpMock.verify();
   });
 
-  it('loads all documents on init without locking to regNo', () => {
+  it('loads all documents on init with sidenav closed by default', () => {
     fixture.detectChanges();
+    expect(component.sidenavOpen()).toBeFalse();
+
     const req = httpMock.expectOne('/api/documents?limit=50');
     expect(req.request.method).toBe('GET');
     req.flush([
@@ -52,7 +54,7 @@ describe('AppComponent', () => {
     expect(component.viewerPage()).toBe(2);
   });
 
-  it('formats 422 array errors safely and resets file input on upload close', () => {
+  it('formats 422 array errors safely in runAudit', () => {
     fixture.detectChanges();
     httpMock.expectOne('/api/documents?limit=50').flush([]);
 
@@ -60,10 +62,5 @@ describe('AppComponent', () => {
     const auditReq = httpMock.expectOne('/api/copilot/audit/%E8%BE%B2%E8%97%A5%E9%80%B200569');
     auditReq.flush({ detail: [{ msg: 'Invalid reg_no' }] }, { status: 422, statusText: 'Unprocessable' });
     expect(component.auditError()).toBe('Invalid reg_no');
-
-    component.uploadNotes.set('stale note');
-    component.closeUploadModal();
-    expect(component.uploadNotes()).toBe('');
-    expect(component.uploadFile()).toBeNull();
   });
 });

@@ -1,10 +1,13 @@
 import { Component, computed, effect, inject, input, output, signal } from '@angular/core';
+import { MatButtonModule } from '@angular/material/button';
+import { MatCardModule } from '@angular/material/card';
 
 import { Box2D, CitationRef } from '../../models/compliance.models';
 import { ComplianceApiService } from '../../services/compliance-api.service';
 
 @Component({
   selector: 'app-bbox-svg-viewer',
+  imports: [MatCardModule, MatButtonModule],
   templateUrl: './bbox-svg-viewer.component.html',
   styleUrl: './bbox-svg-viewer.component.scss',
 })

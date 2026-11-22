@@ -20,7 +20,7 @@ describe('CopilotAuditPanelComponent', () => {
   it('renders progress when loading and bilingual summaries + citation buttons for report', () => {
     fixture.componentRef.setInput('loading', true);
     fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('progress')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('mat-progress-bar')).toBeTruthy();
 
     const citation: CitationRef = {
       doc_id: 'loa_1',

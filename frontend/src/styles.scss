@@ -1,4 +1,8 @@
-/* Global design tokens & native light/dark support (modern-web-guidance: dark-mode, dialog) */
+@use '@angular/material' as mat;
+
+@include mat.core();
+
+/* Global M3 theme & native light/dark support (color-scheme: light dark) */
 :root {
   color-scheme: light dark;
   accent-color: var(--accent-color);
@@ -51,14 +55,6 @@
   --status-ok-fg: var(--status-ok-fg-light);
   --status-ok-bg: var(--status-ok-bg-light);
 
-  /* Keep Angular Material M3 surface/primary tokens aligned with light/dark mode */
-  --mat-sys-surface: var(--surface-card);
-  --mat-sys-on-surface: var(--text-primary);
-  --mat-sys-primary: var(--accent-color);
-  --mat-sys-on-primary: light-dark(#ffffff, #0b1929);
-  --mat-sys-outline: var(--border-subtle);
-  --mat-sys-outline-variant: var(--border-subtle);
-
   @media (prefers-color-scheme: dark) {
     --surface-bg: var(--surface-bg-dark);
     --surface-card: var(--surface-card-dark);
@@ -92,6 +88,15 @@
     --status-ok-fg: light-dark(var(--status-ok-fg-light), var(--status-ok-fg-dark));
     --status-ok-bg: light-dark(var(--status-ok-bg-light), var(--status-ok-bg-dark));
   }
+
+  @include mat.theme((
+    color: (
+      theme-type: color-scheme,
+      primary: mat.$azure-palette,
+    ),
+    typography: Roboto,
+    density: 0,
+  ));
 }
 
 html,
@@ -104,14 +109,4 @@ body {
   background-color: var(--surface-bg);
   color: var(--text-primary);
   font-family: Roboto, "Noto Sans TC", "Microsoft JhengHei", "Helvetica Neue", sans-serif;
-}
-
-/* Prevent scroll chaining on modal <dialog> & ::backdrop (modern-web-guidance: dialog) */
-dialog:modal {
-  overscroll-behavior: contain;
-}
-
-dialog::backdrop {
-  overflow: hidden;
-  overscroll-behavior: contain;
 }

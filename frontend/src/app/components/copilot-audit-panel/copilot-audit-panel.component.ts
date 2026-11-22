@@ -1,4 +1,9 @@
 import { Component, input, output } from '@angular/core';
+import { MatButtonModule } from '@angular/material/button';
+import { MatCardModule } from '@angular/material/card';
+import { MatChipsModule } from '@angular/material/chips';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatTableModule } from '@angular/material/table';
 
 import {
   ActionStatus,
@@ -9,11 +14,13 @@ import {
 
 @Component({
   selector: 'app-copilot-audit-panel',
-  standalone: true,
+  imports: [MatCardModule, MatButtonModule, MatChipsModule, MatProgressBarModule, MatTableModule],
   templateUrl: './copilot-audit-panel.component.html',
   styleUrl: './copilot-audit-panel.component.scss',
 })
 export class CopilotAuditPanelComponent {
+  readonly displayedColumns = ['field_name', 'action_status', 'current_label_value', 'recommended_new_value', 'citations'] as const;
+
   readonly report = input<ComplianceAuditReport | null>(null);
   readonly loading = input<boolean>(false);
   readonly errorMessage = input<string | null>(null);

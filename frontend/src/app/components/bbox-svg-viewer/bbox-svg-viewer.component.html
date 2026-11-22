@@ -1,4 +1,4 @@
-<section class="viewer-card" aria-label="文件座標檢視器">
+<mat-card appearance="outlined" class="viewer-card" aria-label="文件座標檢視器">
   <header class="viewer-toolbar">
     <div class="viewer-title">
       <strong>{{ docLabel() || docId() || '尚未選取文件' }}</strong>
@@ -8,10 +8,10 @@
     </div>
     @if (docId() && totalPages() > 1) {
       <div class="page-controls">
-        <button type="button" class="nav-btn" [disabled]="pageNumber() <= 1" (click)="prevPage()">
+        <button type="button" mat-stroked-button [disabled]="pageNumber() <= 1" (click)="prevPage()">
           上一頁
         </button>
-        <button type="button" class="nav-btn" [disabled]="pageNumber() >= totalPages()" (click)="nextPage()">
+        <button type="button" mat-stroked-button [disabled]="pageNumber() >= totalPages()" (click)="nextPage()">
           下一頁
         </button>
       </div>
@@ -69,4 +69,4 @@
       <p>點擊左側檢查項目的引用按鈕，即可於此定位對應頁面與座標框。</p>
     </div>
   }
-</section>
+</mat-card>

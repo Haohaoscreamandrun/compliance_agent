@@ -88,3 +88,23 @@ export class ComplianceApiService {
     );
   }
 }
+
+export function extractApiErrorMessage(err: unknown, fallback: string): string {
+  const detail = (err as { error?: { detail?: unknown } } | null)?.error?.detail;
+  if (typeof detail === 'string' && detail.trim()) {
+    return detail;
+  }
+  if (Array.isArray(detail) && detail.length > 0) {
+    const msgs = detail
+      .map((item) =>
+        typeof item === 'object' && item !== null && 'msg' in item
+          ? String((item as { msg: unknown }).msg)
+          : String(item),
+      )
+      .filter(Boolean);
+    if (msgs.length > 0) {
+      return msgs.join('; ');
+    }
+  }
+  return fallback;
+}

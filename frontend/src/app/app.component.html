@@ -1,110 +1,120 @@
 <mat-toolbar class="top-bar">
   <span class="brand">農藥標示合規審查系統 <small lang="en">Compliance Copilot</small></span>
   <div class="toolbar-actions">
-    <label class="sr-only" for="reg-no-input">許可證字號</label>
-    <input
-      id="reg-no-input"
-      class="reg-input"
-      type="text"
-      [ngModel]="regNo()"
-      (ngModelChange)="regNo.set($event)"
-      placeholder="輸入許可證字號 e.g. 農藥進00569"
-    />
+    <mat-form-field appearance="outline" subscriptSizing="dynamic" class="reg-field">
+      <mat-label>許可證字號</mat-label>
+      <input
+        matInput
+        type="text"
+        [ngModel]="regNo()"
+        (ngModelChange)="regNo.set($event)"
+        placeholder="e.g. 農藥進00569"
+      />
+    </mat-form-field>
     <button mat-stroked-button type="button" (click)="lookupMoa()">查詢 MOA</button>
     <button mat-flat-button type="button" [disabled]="auditLoading()" (click)="runAudit()">
       {{ auditLoading() ? '審查中…' : '執行合規審查' }}
     </button>
     <button mat-stroked-button type="button" (click)="openUploadModal()">上傳文件</button>
+    <button
+      mat-stroked-button
+      type="button"
+      (click)="sidenavOpen.set(!sidenavOpen())"
+      [attr.aria-expanded]="sidenavOpen()"
+    >
+      文件庫 ({{ documents().length }})
+    </button>
   </div>
 </mat-toolbar>
 
-<main class="workspace">
-  @if (uploadSuccess(); as uOk) {
-    <div class="toast-ok" role="status">
-      <span>{{ uOk }}</span>
-      <button type="button" class="mini-btn" (click)="uploadSuccess.set(null)" aria-label="關閉上傳成功訊息">
-        關閉
-      </button>
+<mat-sidenav-container class="app-shell">
+  <mat-sidenav
+    mode="over"
+    position="end"
+    [opened]="sidenavOpen()"
+    (closedStart)="sidenavOpen.set(false)"
+    class="docs-sidenav"
+    aria-label="已上傳文件清單"
+  >
+    <div class="sidenav-header">
+      <h2>文件庫 ({{ documents().length }})</h2>
+      <button mat-button type="button" (click)="sidenavOpen.set(false)">關閉</button>
     </div>
-  }
 
-  @if (moaSnapshot(); as moa) {
-    <section class="moa-strip" aria-label="MOA 登記摘要">
-      <strong>MOA {{ moa.reg_no }}</strong>
-      @if (moa.chinese_name || moa.english_name) {
-        <span>
-          {{ moa.chinese_name || '' }}
-          @if (moa.english_name) {
-            (<span lang="en">{{ moa.english_name }}</span>)
-          }
-        </span>
-      }
-      <span>劑型/含量：{{ moa.formulation || '—' }} {{ moa.content_pct || '' }}</span>
-      <span>製造廠：{{ moa.foreign_manufacturer || '—' }}</span>
-      <span>業者：{{ moa.company_name || '—' }}</span>
-      @if (moa.valid_until_roc) {
-        <span>效期：{{ moa.valid_until_roc }}</span>
-      }
-      @if (moa.revocation_status) {
-        <span>狀態：{{ moa.revocation_status }}</span>
-      }
-      @if (moa.stale) {
-        <span class="stale-badge">快取</span>
-      }
-    </section>
-  }
+    <div class="sidenav-filters">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
+        <mat-label>文件類型</mat-label>
+        <mat-select [ngModel]="searchDocType()" (ngModelChange)="searchDocType.set($event); loadDocuments()">
+          <mat-option value="">全部類型</mat-option>
+          <mat-option value="label">label (標籤)</mat-option>
+          <mat-option value="msds">msds (GHS 安全資料表)</mat-option>
+          <mat-option value="change_cert">change_cert (LoA / MoC / Other)</mat-option>
+          <mat-option value="official_letter">official_letter (防檢署公文)</mat-option>
+        </mat-select>
+      </mat-form-field>
 
-  <section class="docs-strip" aria-label="已上傳文件清單">
-    <div class="docs-filter-row">
-      <strong>文件庫</strong>
-      <label class="filter-toggle">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
+        <mat-label>普通名稱 (中文/EN)</mat-label>
         <input
-          type="checkbox"
-          [ngModel]="filterByRegNo()"
-          (ngModelChange)="filterByRegNo.set($event); loadDocuments()"
+          matInput
+          type="search"
+          [ngModel]="searchCommonName()"
+          (ngModelChange)="searchCommonName.set($event)"
         />
-        <span>僅顯示 {{ regNo() || '目前許可證' }}</span>
-      </label>
-      <input
-        type="search"
-        class="filter-input"
-        [ngModel]="searchCommonName()"
-        (ngModelChange)="searchCommonName.set($event)"
-        placeholder="普通名稱 (中文/EN)"
-        aria-label="以普通名稱搜尋"
-      />
-      <input
-        type="search"
-        class="filter-input"
-        [ngModel]="searchProductCode()"
-        (ngModelChange)="searchProductCode.set($event)"
-        placeholder="內部代碼 e.g. BAS 175 01 F"
-        aria-label="以內部代碼搜尋"
-      />
-      <button type="button" class="mini-btn" (click)="loadDocuments()">搜尋 / 重新整理</button>
-      @if (docsLoading()) {
-        <progress aria-label="載入文件清單"></progress>
-      }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
+        <mat-label>內部代碼</mat-label>
+        <input
+          matInput
+          type="search"
+          [ngModel]="searchProductCode()"
+          (ngModelChange)="searchProductCode.set($event)"
+          placeholder="e.g. BAS 175 01 F"
+        />
+      </mat-form-field>
+
+      <mat-checkbox
+        [ngModel]="filterByRegNo()"
+        (ngModelChange)="filterByRegNo.set($event); loadDocuments()"
+      >
+        僅顯示 {{ regNo() || '目前許可證' }}
+      </mat-checkbox>
+
+      <button mat-stroked-button type="button" (click)="loadDocuments()">搜尋 / 重新整理</button>
     </div>
+
+    @if (docsLoading()) {
+      <mat-progress-bar mode="indeterminate" aria-label="載入文件清單"></mat-progress-bar>
+    }
     @if (docsError(); as dErr) {
       <p class="form-error" role="alert">{{ dErr }}</p>
     }
 
-    @if (documents().length > 0) {
-      <div class="doc-chips">
-        @for (doc of documents(); track doc.doc_id) {
-          <div class="doc-chip" [class.is-baseline]="doc.is_active_baseline">
-            <button type="button" class="chip-main" (click)="previewDocument(doc)">
-              <span class="doc-type-tag">{{ doc.doc_type }}</span>
-              <span>{{ doc.filename }}</span>
+    <div class="doc-list">
+      @for (doc of documents(); track doc.doc_id) {
+        <mat-card appearance="outlined" class="doc-item" [class.is-baseline]="doc.is_active_baseline">
+          <div class="doc-item-top">
+            <mat-chip-set>
+              <mat-chip>{{ doc.doc_type }}</mat-chip>
               @if (doc.is_active_baseline) {
-                <span class="baseline-tag">基準</span>
+                <mat-chip highlighted>基準</mat-chip>
               }
+            </mat-chip-set>
+            <span class="doc-pages">{{ doc.page_count }} 頁</span>
+          </div>
+          <div class="doc-filename">{{ doc.filename }}</div>
+          @if (doc.reg_no || doc.common_name) {
+            <div class="doc-meta">{{ doc.reg_no || '多產品/未綁定' }} {{ doc.common_name || '' }}</div>
+          }
+          <div class="doc-actions">
+            <button mat-button type="button" (click)="previewDocument(doc); sidenavOpen.set(false)">
+              預覽
             </button>
             @if (doc.reg_no) {
               <button
+                mat-button
                 type="button"
-                class="mini-btn"
                 (click)="toggleBaseline(doc)"
                 [attr.aria-pressed]="doc.is_active_baseline"
               >
@@ -112,101 +122,57 @@
               </button>
             }
           </div>
-        }
-      </div>
-    }
-  </section>
-
-  <div class="split-grid">
-    <app-copilot-audit-panel
-      [report]="auditReport()"
-      [loading]="auditLoading()"
-      [errorMessage]="auditError()"
-      (selectCitation)="onSelectCitation($event)"
-    />
-    <app-bbox-svg-viewer
-      [docId]="viewerDocId()"
-      [pageNumber]="viewerPage()"
-      [totalPages]="viewerTotalPages()"
-      [docLabel]="viewerDocLabel()"
-      [citation]="activeCitation()"
-      (pageChange)="viewerPage.set($event)"
-    />
-  </div>
-</main>
-
-<!-- Native modal <dialog> (modern-web-guidance: no role="dialog" or aria-modal) -->
-<dialog #uploadDialog aria-labelledby="upload-dialog-title" (close)="onDialogClose()">
-  <header class="dialog-header">
-    <h2 id="upload-dialog-title">上傳合規審查文件</h2>
-    <form method="dialog">
-      <button type="submit" class="close-btn" aria-label="關閉上傳視窗">✕</button>
-    </form>
-  </header>
-
-  <form class="upload-form" (submit)="submitUpload($event)">
-    <label>
-      文件類型 *
-      <select
-        autofocus
-        [ngModel]="uploadDocType()"
-        (ngModelChange)="uploadDocType.set($event)"
-        name="docType"
-      >
-        <option value="label">label (產品標籤 / 原體標籤)</option>
-        <option value="msds">msds (GHS 安全資料表)</option>
-        <option value="change_cert">change_cert (LoA / MoC / Free Sale / LoO / Other)</option>
-        <option value="official_letter">official_letter (防檢署公文)</option>
-      </select>
-    </label>
-
-    <label>
-      許可證字號（多產品 LoA/MoC 可留空；other 類型必填）
-      <input
-        type="text"
-        [ngModel]="uploadRegNo()"
-        (ngModelChange)="uploadRegNo.set($event)"
-        name="uploadRegNo"
-        placeholder="例：農藥進00569"
-      />
-    </label>
-
-    <label>
-      人工備註（選填，建議用於 other 類型證明）
-      <input
-        type="text"
-        [ngModel]="uploadNotes()"
-        (ngModelChange)="uploadNotes.set($event)"
-        name="uploadNotes"
-        placeholder="補充說明或變更目的"
-      />
-    </label>
-
-    <label>
-      選擇 PDF 或圖片檔案 *
-      <input
-        #uploadFileInput
-        type="file"
-        accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff"
-        (change)="onFileSelected($event)"
-      />
-    </label>
-
-    @if (uploading()) {
-      <div class="upload-progress">
-        <span>正在解析與萃取座標…</span>
-        <progress aria-label="文件解析中"></progress>
-      </div>
-    }
-    @if (uploadError(); as uErr) {
-      <p class="form-error" role="alert">{{ uErr }}</p>
-    }
-
-    <div class="dialog-actions">
-      <button type="button" class="mini-btn" (click)="closeUploadModal()">取消</button>
-      <button type="submit" mat-flat-button [disabled]="uploading()">
-        {{ uploading() ? '解析中…' : '開始上傳與解析' }}
-      </button>
+        </mat-card>
+      } @empty {
+        <p class="empty-docs">目前無符合條件的文件。</p>
+      }
     </div>
-  </form>
-</dialog>
+  </mat-sidenav>
+
+  <mat-sidenav-content>
+    <main class="workspace">
+      @if (moaSnapshot(); as moa) {
+        <mat-card appearance="outlined" class="moa-strip" aria-label="MOA 登記摘要">
+          <strong>MOA {{ moa.reg_no }}</strong>
+          @if (moa.chinese_name || moa.english_name) {
+            <span>
+              {{ moa.chinese_name || '' }}
+              @if (moa.english_name) {
+                (<span lang="en">{{ moa.english_name }}</span>)
+              }
+            </span>
+          }
+          <span>劑型/含量：{{ moa.formulation || '—' }} {{ moa.content_pct || '' }}</span>
+          <span>製造廠：{{ moa.foreign_manufacturer || '—' }}</span>
+          <span>業者：{{ moa.company_name || '—' }}</span>
+          @if (moa.valid_until_roc) {
+            <span>效期：{{ moa.valid_until_roc }}</span>
+          }
+          @if (moa.revocation_status) {
+            <span>狀態：{{ moa.revocation_status }}</span>
+          }
+          @if (moa.stale) {
+            <span class="stale-badge">快取</span>
+          }
+        </mat-card>
+      }
+
+      <div class="split-grid">
+        <app-copilot-audit-panel
+          [report]="auditReport()"
+          [loading]="auditLoading()"
+          [errorMessage]="auditError()"
+          (selectCitation)="onSelectCitation($event)"
+        />
+        <app-bbox-svg-viewer
+          [docId]="viewerDocId()"
+          [pageNumber]="viewerPage()"
+          [totalPages]="viewerTotalPages()"
+          [docLabel]="viewerDocLabel()"
+          [citation]="activeCitation()"
+          (pageChange)="viewerPage.set($event)"
+        />
+      </div>
+    </main>
+  </mat-sidenav-content>
+</mat-sidenav-container>

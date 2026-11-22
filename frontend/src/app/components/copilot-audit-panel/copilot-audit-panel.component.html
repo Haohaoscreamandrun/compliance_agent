@@ -1,8 +1,8 @@
-<section class="audit-panel" aria-label="合規審查結果">
+<mat-card appearance="outlined" class="audit-panel" aria-label="合規審查結果">
   @if (loading()) {
     <div class="loading-box" role="status">
       <p>正在執行 Two-Phase Copilot 合規審查（MOA 查詢 + Cascade Diff）…</p>
-      <progress aria-label="合規審查進行中"></progress>
+      <mat-progress-bar mode="indeterminate" aria-label="合規審查進行中"></mat-progress-bar>
     </div>
   }
 
@@ -27,7 +27,9 @@
         </span>
       </div>
       @if (r.msds_doc_id_used) {
-        <span class="meta-chip">MSDS: {{ r.msds_doc_id_used }}</span>
+        <mat-chip-set aria-label="審查使用文件">
+          <mat-chip>MSDS: {{ r.msds_doc_id_used }}</mat-chip>
+        </mat-chip-set>
       }
     </header>
 
@@ -51,62 +53,72 @@
       <p class="all-clear">目前無標示差異項目。</p>
     } @else {
       <div tabindex="0" role="region" aria-labelledby="checklist-caption" class="table-wrapper">
-        <table>
+        <table mat-table [dataSource]="r.checklist_items">
           <caption id="checklist-caption">標籤更新檢查清單 ({{ r.checklist_items.length }} 項)</caption>
-          <thead>
-            <tr>
-              <th scope="col">欄位名稱</th>
-              <th scope="col">狀態</th>
-              <th scope="col">現行標示</th>
-              <th scope="col">建議 / 新值</th>
-              <th scope="col">座標引用</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (item of r.checklist_items; track item.field_name + ':' + $index) {
-              <tr>
-                <th scope="row">{{ item.field_name }}</th>
-                <td>
-                  <span class="status-pill" [attr.data-status]="item.action_status">
-                    {{ statusLabel(item.action_status) }}
-                  </span>
-                </td>
-                <td class="cell-value">{{ item.current_label_value }}</td>
-                <td class="cell-value">
-                  <div>{{ item.recommended_new_value }}</div>
-                  <small class="rationale" lang="en">{{ item.rationale }}</small>
-                </td>
-                <td class="citations-cell">
-                  <div class="citations-list">
-                    @if (item.current_label_citation; as lc) {
-                      <button
-                        type="button"
-                        class="cite-btn cite-label"
-                        [attr.aria-label]="'檢視「' + item.field_name + '」標籤第 ' + lc.page + ' 頁引用'"
-                        [title]="lc.doc_id + ' P' + lc.page"
-                        (click)="selectCitation.emit(lc)"
-                      >
-                        標籤 P{{ lc.page }}
-                      </button>
-                    }
-                    @for (sc of item.supporting_citations; track sc.doc_id + ':' + sc.page + ':' + $index) {
-                      <button
-                        type="button"
-                        class="cite-btn cite-support"
-                        [attr.aria-label]="'檢視「' + item.field_name + '」佐證文件 ' + sc.doc_id + ' 第 ' + sc.page + ' 頁引用'"
-                        [title]="sc.doc_id + ' P' + sc.page"
-                        (click)="selectCitation.emit(sc)"
-                      >
-                        佐證 P{{ sc.page }}
-                      </button>
-                    }
-                  </div>
-                </td>
-              </tr>
-            }
-          </tbody>
+
+          <ng-container matColumnDef="field_name">
+            <th mat-header-cell *matHeaderCellDef scope="col">欄位名稱</th>
+            <th mat-cell *matCellDef="let item" scope="row">{{ item.field_name }}</th>
+          </ng-container>
+
+          <ng-container matColumnDef="action_status">
+            <th mat-header-cell *matHeaderCellDef scope="col">狀態</th>
+            <td mat-cell *matCellDef="let item">
+              <span class="status-pill" [attr.data-status]="item.action_status">
+                {{ statusLabel(item.action_status) }}
+              </span>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="current_label_value">
+            <th mat-header-cell *matHeaderCellDef scope="col">現行標示</th>
+            <td mat-cell *matCellDef="let item" class="cell-value">{{ item.current_label_value }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="recommended_new_value">
+            <th mat-header-cell *matHeaderCellDef scope="col">建議 / 新值</th>
+            <td mat-cell *matCellDef="let item" class="cell-value">
+              <div>{{ item.recommended_new_value }}</div>
+              <small class="rationale" lang="en">{{ item.rationale }}</small>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="citations">
+            <th mat-header-cell *matHeaderCellDef scope="col">座標引用</th>
+            <td mat-cell *matCellDef="let item" class="citations-cell">
+              <div class="citations-list">
+                @if (item.current_label_citation; as lc) {
+                  <button
+                    type="button"
+                    mat-stroked-button
+                    class="cite-btn cite-label"
+                    [attr.aria-label]="'檢視「' + item.field_name + '」標籤第 ' + lc.page + ' 頁引用'"
+                    [title]="lc.doc_id + ' P' + lc.page"
+                    (click)="selectCitation.emit(lc)"
+                  >
+                    標籤 P{{ lc.page }}
+                  </button>
+                }
+                @for (sc of item.supporting_citations; track sc.doc_id + ':' + sc.page + ':' + $index) {
+                  <button
+                    type="button"
+                    mat-stroked-button
+                    class="cite-btn cite-support"
+                    [attr.aria-label]="'檢視「' + item.field_name + '」佐證文件 ' + sc.doc_id + ' 第 ' + sc.page + ' 頁引用'"
+                    [title]="sc.doc_id + ' P' + sc.page"
+                    (click)="selectCitation.emit(sc)"
+                  >
+                    佐證 P{{ sc.page }}
+                  </button>
+                }
+              </div>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
         </table>
       </div>
     }
   }
-</section>
+</mat-card>
