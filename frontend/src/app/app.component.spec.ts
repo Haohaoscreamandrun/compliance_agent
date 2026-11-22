@@ -101,6 +101,10 @@ describe('AppComponent', () => {
       },
     ]);
     expect(component.baselineDocs().length).toBe(1);
+
+    httpMock
+      .expectOne('/api/copilot/audit/%E8%BE%B2%E8%97%A5%E9%80%B200569')
+      .flush(null, { status: 404, statusText: 'Not Found' });
   });
 
   it('formats 422 array errors safely in runAudit', () => {

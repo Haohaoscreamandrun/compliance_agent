@@ -116,6 +116,12 @@ export class ComplianceApiService {
     return `${this.baseUrl}/documents/${encodeURIComponent(docId)}/pages/${pageNumber}/image`;
   }
 
+  getCachedAuditReport(regNo: string): Observable<ComplianceAuditReport> {
+    return this.http.get<ComplianceAuditReport>(
+      `${this.baseUrl}/copilot/audit/${encodeURIComponent(regNo.trim())}`,
+    );
+  }
+
   runComplianceAudit(regNo: string, forceRefresh = false): Observable<ComplianceAuditReport> {
     const params = forceRefresh ? new HttpParams().set('force_refresh', 'true') : undefined;
     return this.http.post<ComplianceAuditReport>(

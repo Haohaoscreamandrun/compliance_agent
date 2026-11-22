@@ -39,7 +39,13 @@
 
 - [x] **CL 6.1 (`feat(backend-polish)`):** Chinese-first label formulation & LoA `issuing_agency` prompt fixes (`extraction_prompts.py`), 2400px/90q WebP sharpness (`config.py`), `volume_tag` multi-volume label baselines (`models.py`, `session.py`, `routes_documents.py`, `tools.py`), and global `EntityAlias` table + `/api/entity-aliases` routes + `cascade_diff.py` alias matching.
 - [x] **CL 6.2 (`feat(ui-polish)`):** Remove MOA search button; replace top audit button with `載入基準文件` panel + bottom `執行合規審查` trigger; add 0.5x–4x zoom + hover magnifier loupe in `BboxSvgViewerComponent`; add `EntityAliasDialogComponent` bilingual confirmation; responsive layout polish across viewports.
-- [ ] **Checkpoint / PR #6:** Review & merge `develop` → `main` for Component 6.
+- [x] **Checkpoint / PR #6:** Review & merge `develop` → `main` for Component 6.
+
+## Component 7: Cloudflare Cloud-Native Deployment, R2, Alembic & CI/CD
+
+- [x] **CL 7.1 (`feat(cloud-storage-db)`):** Add dual-mode `PageStorage` (local disk ↔ Cloudflare R2 S3 API), `postgres_ssl` support, Alembic migrations (`backend/alembic/`), `GET /api/copilot/audit/{reg_no}` read-only demo endpoint + seed fixture, and `ADR-001` Decision 5.
+- [x] **CL 7.2 (`feat(cloudflare-ci)`):** Add `wrangler.jsonc`, `src/worker.ts` (Static Assets + R2 edge image serving + `ComplianceBackend` Container + `WRITE_ACCESS_TOKEN` / Zero Trust hybrid), and `.github/workflows/ci-cd.yml`.
+- [ ] **Checkpoint / PR #7:** Review & merge `develop` → `main` to trigger Cloudflare deploy.
 
 ## Future Enhancements (Post-MVP)
 

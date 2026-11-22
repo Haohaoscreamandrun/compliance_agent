@@ -175,6 +175,17 @@ export class AppComponent implements OnInit {
         next: (docs) => {
           this.baselineDocs.set(docs);
           this.baselinesLoading.set(false);
+          this.api
+            .getCachedAuditReport(target)
+            .pipe(
+              catchError(() => of(null)),
+              takeUntilDestroyed(this.destroyRef),
+            )
+            .subscribe((cached) => {
+              if (cached) {
+                this.auditReport.set(cached);
+              }
+            });
         },
         error: (err) => {
           this.baselinesError.set(extractApiErrorMessage(err, '載入基準文件失敗'));
