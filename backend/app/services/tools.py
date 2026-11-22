@@ -56,10 +56,12 @@ class CopilotToolset:
         session: AsyncSession,
         http: httpx.AsyncClient,
         moa_api_base_url: str,
+        confirmed_aliases: set[tuple[str, str]] | None = None,
     ) -> None:
         self.session = session
         self.http = http
         self.moa_api_base_url = moa_api_base_url
+        self.confirmed_aliases = confirmed_aliases or set()
 
         self._moa: MoaRegistry | None = None
         self.moa_stale: bool = False
@@ -68,6 +70,7 @@ class CopilotToolset:
         self.last_findings: list[CascadeDiffFinding] = []
 
         self._label: tuple[str, ProductLabelExtraction] | None = None
+        self._labels: list[tuple[str, str, ProductLabelExtraction]] = []
         self._msds: tuple[str, MsdsExtraction] | None = None
         self._cert: tuple[str, NotarizedCertExtraction] | None = None
         self._extra_certs: list[tuple[str, NotarizedCertExtraction]] = []
@@ -138,6 +141,7 @@ class CopilotToolset:
     async def get_baseline_documents(self, reg_no: str) -> dict[str, Any]:
         """Tool 2: Load uploaded Label, latest MSDS (by issued_version), and Change Cert for `reg_no`."""
         self._label = None
+        self._labels = []
         self._msds = None
         self._cert = None
         self._extra_certs = []
@@ -168,8 +172,13 @@ class CopilotToolset:
         certs = [d for d in docs if d.doc_type == "change_cert"]
 
         if labels:
-            doc = labels[0]
-            self._label = (doc.doc_id, ProductLabelExtraction.model_validate(doc.extracted_data))
+            active_labels = [d for d in labels if d.is_active_baseline] or [labels[0]]
+            for doc in active_labels:
+                self._labels.append(
+                    (doc.doc_id, doc.volume_tag or "", ProductLabelExtraction.model_validate(doc.extracted_data))
+                )
+            first = self._labels[0]
+            self._label = (first[0], first[2])
         else:
             self._warn(f"No baseline product label uploaded for '{canon_reg}'.")
 
@@ -257,18 +266,42 @@ class CopilotToolset:
         """Tool 4: Run deterministic `run_cascade_diff` across all loaded sources for `reg_no`."""
         canon_reg = normalize_reg_no(reg_no)
         self._resolve_certs(canon_reg)
-        findings = run_cascade_diff(
-            reg_no=canon_reg,
-            label=self._label[1] if self._label else None,
-            label_doc_id=self._label[0] if self._label else None,
-            msds=self._msds[1] if self._msds else None,
-            msds_doc_id=self._msds[0] if self._msds else None,
-            change_cert=self._cert[1] if self._cert else None,
-            cert_doc_id=self._cert[0] if self._cert else None,
-            extra_certs=self._extra_certs,
-            moa=self._moa,
-            official_letters=list(self._letters.items()),
+        confirmed_aliases = self.confirmed_aliases
+
+        label_targets = (
+            self._labels
+            if self._labels
+            else ([(self._label[0], "", self._label[1])] if self._label else [(None, "", None)])
         )
+        findings: list[CascadeDiffFinding] = []
+        seen_non_label: set[tuple[str, str, str, str]] = set()
+        multi_label = len(label_targets) > 1
+
+        for l_id, vol_tag, l_model in label_targets:
+            batch = run_cascade_diff(
+                reg_no=canon_reg,
+                label=l_model,
+                label_doc_id=l_id,
+                msds=self._msds[1] if self._msds else None,
+                msds_doc_id=self._msds[0] if self._msds else None,
+                change_cert=self._cert[1] if self._cert else None,
+                cert_doc_id=self._cert[0] if self._cert else None,
+                extra_certs=self._extra_certs,
+                moa=self._moa,
+                official_letters=list(self._letters.items()),
+                confirmed_aliases=confirmed_aliases,
+            )
+            for f in batch:
+                if f.current_label_citation is None:
+                    dedup_key = (f.field_name, f.category, f.current_label_value, f.recommended_new_value)
+                    if dedup_key in seen_non_label:
+                        continue
+                    seen_non_label.add(dedup_key)
+                elif multi_label:
+                    tag = vol_tag or l_id or ""
+                    f.field_name = f"[{tag}] {f.field_name}"
+                findings.append(f)
+
         self.last_findings = findings
         return {
             "reg_no": canon_reg,

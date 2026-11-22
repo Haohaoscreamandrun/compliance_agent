@@ -65,6 +65,7 @@ class ComplianceAuditReport(BaseModel):
     moa_snapshot_stale: bool = False
     msds_doc_id_used: str | None = None
     audit_warnings: list[str] = Field(default_factory=list)
+    from_cache: bool = False
 
     @field_validator("executive_summary_zh", "executive_summary_en")
     @classmethod

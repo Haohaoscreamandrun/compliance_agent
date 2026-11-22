@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes_copilot import router as copilot_router
 from app.api.routes_documents import router as documents_router
+from app.api.routes_entity_aliases import router as entity_aliases_router
 from app.api.routes_registry import router as registry_router
 from app.config import Settings
 from app.db.session import build_async_engine, build_session_factory, init_db_schema
@@ -73,6 +74,7 @@ def create_app(
     application.include_router(registry_router)
     application.include_router(documents_router)
     application.include_router(copilot_router)
+    application.include_router(entity_aliases_router)
 
     @application.get("/health", tags=["health"])
     @application.get("/healthz", include_in_schema=False)

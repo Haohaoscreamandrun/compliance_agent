@@ -145,6 +145,8 @@ def test_postgresql_jsonb_ddl_and_cascade_constraints() -> None:
         "documents",
         "document_pages",
         "document_clauses",
+        "entity_aliases",
+        "audit_reports",
     }
     assert set(Base.metadata.tables.keys()) == expected_tables
 
