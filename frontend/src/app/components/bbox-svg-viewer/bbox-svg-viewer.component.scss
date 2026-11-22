@@ -24,7 +24,9 @@
 }
 
 .page-indicator {
-  font-size: 0.85rem;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.82rem;
   color: var(--text-muted);
 }
 
@@ -39,14 +41,16 @@
 
 .zoom-controls .is-active {
   border-color: var(--accent-color);
-  background: color-mix(in srgb, var(--accent-color) 14%, transparent);
+  color: var(--accent-color);
+  background: color-mix(in srgb, var(--accent-color) 10%, transparent);
 }
 
 .quote-banner {
   margin: 0;
-  padding: 0.5rem 0.75rem;
+  padding: 0.55rem 0.85rem;
   border-inline-start: 3px solid var(--accent-color);
-  background: color-mix(in srgb, var(--accent-color) 8%, transparent);
+  border-radius: 0 6px 6px 0;
+  background: var(--surface-raised);
   font-size: 0.875rem;
 }
 

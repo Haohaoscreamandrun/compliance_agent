@@ -53,6 +53,11 @@
 - [x] **CL 8.2 (`infra(github-ci)`):** Configure GitHub Actions secrets (`CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `DATABASE_URL`), bump CI Node.js to 22 for Wrangler 4.166.0, and sanitize deploy token formatting in `.github/workflows/ci-cd.yml`.
 - [x] **CL 8.3 (`infra(cloudflare)`):** Enable Workers Paid plan for Containers, register `*.workers.dev` subdomain, create R2 bucket `compliance-agent-pages` + S3 API token, create scoped Cloudflare deploy API token (`Workers Scripts: Edit`, `Workers R2 Storage: Edit`, `Containers: Edit`, `Account Settings: Read`, `User Details: Read`), configure Worker runtime Variables & Secrets, and attach Zero Trust Access (Self-hosted Workers + email OTP allowlist + `REQUIRE_CF_ACCESS=true`).
 
+## Component 9: Framed-Sheet UI Polish & Typography
+
+- [x] **CL 9.1 (`feat(ui)`):** Apply `design-taste-frontend` (`framed-sheet` layout, IBM Plex Sans/Mono + Noto Sans TC, SVG botanical compliance monogram), Light/Dark theme toggle (light default), opaque document library drawer, and `asciify-engine` `contour` animated backdrop with translucent workspace sheet, cards, and dialogs (`styles.scss`, `index.html`, `app.component.*`, `copilot-audit-panel.component.scss`, `bbox-svg-viewer.component.scss`, `package.json`).
+- [ ] **Checkpoint / PR #9:** Review & merge `develop` → `main` for Component 9.
+
 ## Future Enhancements (Post-MVP)
 
 - [ ] **APHIA Announcements & Chemical Assessments:** Add separate lookup/sync for `pesticide.aphia.gov.tw` official announcements (`農藥公告`), banned/restricted/carcinogen lists, and ACRI chemical risk assessments (not exposed in `EIR027`).

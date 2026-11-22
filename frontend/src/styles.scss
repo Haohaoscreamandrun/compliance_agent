@@ -2,46 +2,63 @@
 
 @include mat.core();
 
-/* Global M3 theme & native light/dark support (color-scheme: light dark) */
+/* Framed-sheet design tokens + light/dark toggle support (light default) */
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   accent-color: var(--accent-color);
 
-  --surface-bg-light: #f6f8fb;
-  --surface-bg-dark: #111418;
-  --surface-card-light: #ffffff;
-  --surface-card-dark: #1a1f26;
-  --text-primary-light: #182026;
-  --text-primary-dark: #edf2f7;
-  --text-muted-light: #52606d;
-  --text-muted-dark: #9aa5b1;
-  --border-subtle-light: #d9e2ec;
-  --border-subtle-dark: #2d3748;
-  --accent-light: #0056b3;
-  --accent-dark: #6cb6ff;
+  --font-sans: 'IBM Plex Sans', 'Noto Sans TC', 'Microsoft JhengHei', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  --status-danger-fg-light: #b71c1c;
+  /* Tinted botanical-slate chrome frame + translucent workspace sheet & cards */
+  --surface-bg-light: #ebf1ed;
+  --surface-bg-dark: #0e1311;
+  --surface-solid-light: #ffffff;
+  --surface-solid-dark: #161b18;
+  --surface-sheet-light: rgba(255, 255, 255, 0.56);
+  --surface-sheet-dark: rgba(18, 23, 20, 0.48);
+  --surface-card-light: rgba(255, 255, 255, 0.74);
+  --surface-card-dark: rgba(22, 27, 24, 0.64);
+  --surface-raised-light: rgba(242, 246, 244, 0.78);
+  --surface-raised-dark: rgba(29, 36, 32, 0.70);
+  --text-primary-light: #131614;
+  --text-primary-dark: #edf2ef;
+  --text-muted-light: #57605b;
+  --text-muted-dark: #97a39d;
+  --border-subtle-light: #d8e2dc;
+  --border-subtle-dark: #28322d;
+  --accent-light: #1b6c80;
+  --accent-dark: #5ec2d8;
+  --sheet-shadow-light: none;
+  --sheet-shadow-dark: none;
+  --card-shadow-light: none;
+  --card-shadow-dark: none;
+
+  --status-danger-fg-light: #831c1e;
   --status-danger-fg-dark: #ff8a80;
-  --status-danger-bg-light: rgba(183, 28, 28, 0.12);
+  --status-danger-bg-light: #ffedea;
   --status-danger-bg-dark: rgba(255, 138, 128, 0.16);
 
-  --status-warn-fg-light: #a63c00;
+  --status-warn-fg-light: #92400e;
   --status-warn-fg-dark: #ffb74d;
-  --status-warn-bg-light: rgba(166, 60, 0, 0.12);
+  --status-warn-bg-light: #fffbeb;
   --status-warn-bg-dark: rgba(255, 183, 77, 0.16);
 
-  --status-info-fg-light: #0d47a1;
+  --status-info-fg-light: #1b4d89;
   --status-info-fg-dark: #90caf9;
-  --status-info-bg-light: rgba(13, 71, 161, 0.12);
+  --status-info-bg-light: #eff6ff;
   --status-info-bg-dark: rgba(144, 202, 249, 0.16);
 
-  --status-ok-fg-light: #1b5e20;
+  --status-ok-fg-light: #04250e;
   --status-ok-fg-dark: #81c784;
-  --status-ok-bg-light: rgba(27, 94, 32, 0.12);
+  --status-ok-bg-light: #dcfae5;
   --status-ok-bg-dark: rgba(129, 199, 132, 0.16);
 
   --surface-bg: var(--surface-bg-light);
+  --surface-solid: var(--surface-solid-light);
+  --surface-sheet: var(--surface-sheet-light);
   --surface-card: var(--surface-card-light);
+  --surface-raised: var(--surface-raised-light);
   --text-primary: var(--text-primary-light);
   --text-muted: var(--text-muted-light);
   --border-subtle: var(--border-subtle-light);
@@ -54,27 +71,26 @@
   --status-info-bg: var(--status-info-bg-light);
   --status-ok-fg: var(--status-ok-fg-light);
   --status-ok-bg: var(--status-ok-bg-light);
+  --sheet-shadow: var(--sheet-shadow-light);
+  --card-shadow: var(--card-shadow-light);
 
-  @media (prefers-color-scheme: dark) {
-    --surface-bg: var(--surface-bg-dark);
-    --surface-card: var(--surface-card-dark);
-    --text-primary: var(--text-primary-dark);
-    --text-muted: var(--text-muted-dark);
-    --border-subtle: var(--border-subtle-dark);
-    --accent-color: var(--accent-dark);
-    --status-danger-fg: var(--status-danger-fg-dark);
-    --status-danger-bg: var(--status-danger-bg-dark);
-    --status-warn-fg: var(--status-warn-fg-dark);
-    --status-warn-bg: var(--status-warn-bg-dark);
-    --status-info-fg: var(--status-info-fg-dark);
-    --status-info-bg: var(--status-info-bg-dark);
-    --status-ok-fg: var(--status-ok-fg-dark);
-    --status-ok-bg: var(--status-ok-bg-dark);
-  }
+  /* Material 3 token overrides: 1px hairline + subtle elevation */
+  --mat-toolbar-container-background-color: transparent;
+  --mat-toolbar-container-text-color: var(--text-primary);
+  --mat-card-outlined-container-color: var(--surface-card);
+  --mat-card-outlined-outline-color: var(--border-subtle);
+  --mat-card-outlined-outline-width: 1px;
+  --mat-card-outlined-container-shape: 10px;
+  --mat-card-outlined-container-elevation-shadow: var(--card-shadow);
+  --mat-sidenav-container-background-color: var(--surface-solid);
+  --mat-sidenav-content-background-color: transparent;
 
   @supports (color: light-dark(white, black)) {
     --surface-bg: light-dark(var(--surface-bg-light), var(--surface-bg-dark));
+    --surface-solid: light-dark(var(--surface-solid-light), var(--surface-solid-dark));
+    --surface-sheet: light-dark(var(--surface-sheet-light), var(--surface-sheet-dark));
     --surface-card: light-dark(var(--surface-card-light), var(--surface-card-dark));
+    --surface-raised: light-dark(var(--surface-raised-light), var(--surface-raised-dark));
     --text-primary: light-dark(var(--text-primary-light), var(--text-primary-dark));
     --text-muted: light-dark(var(--text-muted-light), var(--text-muted-dark));
     --border-subtle: light-dark(var(--border-subtle-light), var(--border-subtle-dark));
@@ -87,16 +103,29 @@
     --status-info-bg: light-dark(var(--status-info-bg-light), var(--status-info-bg-dark));
     --status-ok-fg: light-dark(var(--status-ok-fg-light), var(--status-ok-fg-dark));
     --status-ok-bg: light-dark(var(--status-ok-bg-light), var(--status-ok-bg-dark));
+    --sheet-shadow: light-dark(var(--sheet-shadow-light), var(--sheet-shadow-dark));
+    --card-shadow: light-dark(var(--card-shadow-light), var(--card-shadow-dark));
   }
 
   @include mat.theme((
     color: (
       theme-type: color-scheme,
-      primary: mat.$azure-palette,
+      primary: mat.$cyan-palette,
     ),
-    typography: Roboto,
-    density: 0,
+    typography: (
+      plain-family: var(--font-sans),
+      brand-family: var(--font-sans),
+    ),
+    density: -1,
   ));
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
 }
 
 html,
@@ -108,7 +137,8 @@ body {
   margin: 0;
   background-color: var(--surface-bg);
   color: var(--text-primary);
-  font-family: Roboto, "Noto Sans TC", "Microsoft JhengHei", "Helvetica Neue", sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }
 
 .mat-mdc-dialog-panel {
@@ -117,4 +147,14 @@ body {
 
 .wide-upload-dialog {
   --mat-dialog-container-max-width: 94vw;
+}
+
+.mat-mdc-dialog-surface.mdc-dialog__surface {
+  border: 1px solid var(--border-subtle);
+  background-color: var(--surface-card) !important;
+  backdrop-filter: blur(6px);
+}
+
+.mat-mdc-card.mat-mdc-card-outlined {
+  backdrop-filter: blur(2px);
 }
