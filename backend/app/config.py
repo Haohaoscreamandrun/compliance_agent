@@ -115,6 +115,8 @@ class Settings(BaseSettings):
 
             if raw_url.startswith("postgresql://"):
                 raw_url = raw_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            elif raw_url.startswith("postgres://"):
+                raw_url = raw_url.replace("postgres://", "postgresql+asyncpg://", 1)
             parsed = urlparse(raw_url)
             kept = [
                 (k, v)
