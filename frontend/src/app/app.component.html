@@ -11,9 +11,8 @@
         placeholder="e.g. 農藥進00569"
       />
     </mat-form-field>
-    <button mat-stroked-button type="button" (click)="lookupMoa()">查詢 MOA</button>
-    <button mat-flat-button type="button" [disabled]="auditLoading()" (click)="runAudit()">
-      {{ auditLoading() ? '審查中…' : '執行合規審查' }}
+    <button mat-flat-button type="button" [disabled]="baselinesLoading()" (click)="loadBaselines()">
+      {{ baselinesLoading() ? '載入中…' : '載入基準文件' }}
     </button>
     <button mat-stroked-button type="button" (click)="openUploadModal()">上傳文件</button>
     <button
@@ -97,6 +96,9 @@
           <div class="doc-item-top">
             <mat-chip-set>
               <mat-chip>{{ doc.doc_type }}</mat-chip>
+              @if (doc.volume_tag) {
+                <mat-chip>{{ doc.volume_tag }}</mat-chip>
+              }
               @if (doc.is_active_baseline) {
                 <mat-chip highlighted>基準</mat-chip>
               }
@@ -157,13 +159,56 @@
         </mat-card>
       }
 
+      @if (baselinesLoaded()) {
+        <mat-card appearance="outlined" class="baselines-card" aria-label="基準文件清單">
+          <header class="baselines-header">
+            <h2>{{ regNo() }} 基準文件 ({{ baselineDocs().length }})</h2>
+          </header>
+
+          @if (baselinesLoading()) {
+            <mat-progress-bar mode="indeterminate" aria-label="載入基準文件中"></mat-progress-bar>
+          }
+          @if (baselinesError(); as bErr) {
+            <p class="form-error" role="alert">{{ bErr }}</p>
+          }
+
+          @if (!baselinesLoading()) {
+            <div class="baseline-grid">
+              @for (bDoc of baselineDocs(); track bDoc.doc_id) {
+                <div class="baseline-item">
+                  <mat-chip-set>
+                    <mat-chip>{{ bDoc.doc_type }}</mat-chip>
+                    @if (bDoc.volume_tag) {
+                      <mat-chip>{{ bDoc.volume_tag }}</mat-chip>
+                    }
+                  </mat-chip-set>
+                  <span class="baseline-name">{{ bDoc.filename }}</span>
+                  <button mat-button type="button" (click)="previewDocument(bDoc)">預覽</button>
+                </div>
+              } @empty {
+                <p class="empty-docs">尚無標記為基準的專屬文件（可於「文件庫」設為基準，或直接執行審查）。</p>
+              }
+            </div>
+          }
+
+          <footer class="baselines-footer">
+            <button mat-flat-button type="button" [disabled]="auditLoading()" (click)="runAudit()">
+              {{ auditLoading() ? '審查中…' : '執行合規審查' }}
+            </button>
+          </footer>
+        </mat-card>
+      }
+
       <div class="split-grid">
-        <app-copilot-audit-panel
-          [report]="auditReport()"
-          [loading]="auditLoading()"
-          [errorMessage]="auditError()"
-          (selectCitation)="onSelectCitation($event)"
-        />
+        @if (auditLoading() || auditReport() || auditError()) {
+          <app-copilot-audit-panel
+            [report]="auditReport()"
+            [loading]="auditLoading()"
+            [errorMessage]="auditError()"
+            (selectCitation)="onSelectCitation($event)"
+            (forceRefresh)="runAudit(true)"
+          />
+        }
         <app-bbox-svg-viewer
           [docId]="viewerDocId()"
           [pageNumber]="viewerPage()"

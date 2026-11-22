@@ -52,6 +52,7 @@ export interface ComplianceAuditReport {
   moa_snapshot_stale: boolean;
   msds_doc_id_used: string | null;
   audit_warnings: string[];
+  from_cache?: boolean;
 }
 
 export interface RegistryLookupResponse {
@@ -77,10 +78,18 @@ export interface DocumentSummary {
   filename: string;
   doc_type: DocType;
   reg_no: string | null;
+  volume_tag?: string;
   common_name: string | null;
   is_active_baseline: boolean;
   page_count: number;
   uploaded_at: string;
+}
+
+export interface EntityAlias {
+  id: number;
+  zh_name: string;
+  en_name: string;
+  confirmed: boolean;
 }
 
 export interface DocumentUploadResponse extends DocumentSummary {

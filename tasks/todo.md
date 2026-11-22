@@ -33,7 +33,13 @@
 - [x] **CL 5.0 (`chore(frontend-scaffold)`):** Isolate pure Angular CLI & Angular Material scaffold (`npx @angular/cli@19 new frontend` + `ng add @angular/material` + `nginx.conf`) with zero custom business logic.
 - [x] **CL 5.1 (`feat(ui-core)`):** Add `color-scheme: light dark` & `lang="zh-Hant"` root config, TypeScript models (`compliance.models.ts`), and `ComplianceApiService`.
 - [x] **CL 5.2 (`feat(ui-viewer)`):** Build `BboxSvgViewerComponent` (inline `<svg role="img" viewBox="0 0 1000 1000" preserveAspectRatio="none">` over `fetchpriority="high"` `.webp` `<img>` with `width_px`/`height_px` zero-CLS sizing and `contain: layout style paint`), `CopilotAuditPanelComponent` (`@container` queries, semantic `<caption>`/`<th scope="col|row">` checklist, `>=24x24px` native `<button>` citations, bilingual `lang` tags, `<progress>` state), and native `<dialog>.showModal()` upload modal.
-- [ ] **Checkpoint / PR #5:** Review & merge `develop` → `main` for Component 5.
+- [x] **Checkpoint / PR #5:** Review & merge `develop` → `main` for Component 5.
+
+## Component 6: Polish, Multi-Volume Baselines, Entity Alias Mapping & UX Refinements
+
+- [x] **CL 6.1 (`feat(backend-polish)`):** Chinese-first label formulation & LoA `issuing_agency` prompt fixes (`extraction_prompts.py`), 2400px/90q WebP sharpness (`config.py`), `volume_tag` multi-volume label baselines (`models.py`, `session.py`, `routes_documents.py`, `tools.py`), and global `EntityAlias` table + `/api/entity-aliases` routes + `cascade_diff.py` alias matching.
+- [x] **CL 6.2 (`feat(ui-polish)`):** Remove MOA search button; replace top audit button with `載入基準文件` panel + bottom `執行合規審查` trigger; add 0.5x–4x zoom + hover magnifier loupe in `BboxSvgViewerComponent`; add `EntityAliasDialogComponent` bilingual confirmation; responsive layout polish across viewports.
+- [ ] **Checkpoint / PR #6:** Review & merge `develop` → `main` for Component 6.
 
 ## Future Enhancements (Post-MVP)
 

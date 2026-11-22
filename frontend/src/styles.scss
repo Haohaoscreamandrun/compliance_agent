@@ -110,3 +110,11 @@ body {
   color: var(--text-primary);
   font-family: Roboto, "Noto Sans TC", "Microsoft JhengHei", "Helvetica Neue", sans-serif;
 }
+
+.mat-mdc-dialog-panel {
+  --mat-dialog-container-max-width: 94vw;
+}
+
+.wide-upload-dialog {
+  --mat-dialog-container-max-width: 94vw;
+}

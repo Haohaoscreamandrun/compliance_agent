@@ -1,9 +1,66 @@
+.dialog-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding-inline-end: 1.5rem;
+}
+
 .dialog-form {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  min-inline-size: min(460px, 80vw);
+  gap: 0.85rem;
+  inline-size: 100%;
+  overflow-x: hidden;
   padding-block-start: 0.5rem;
+}
+
+.entries-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0.75rem;
+  inline-size: 100%;
+  min-inline-size: min(340px, 82vw);
+}
+
+.entry-group {
+  flex: 1 1 280px;
+  min-inline-size: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+
+  mat-form-field {
+    inline-size: 100%;
+    min-inline-size: 0;
+  }
+}
+
+.entry-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.entry-status {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+
+  &[data-status='done'] {
+    color: var(--status-ok-fg);
+  }
+  &[data-status='error'] {
+    color: var(--status-danger-fg);
+  }
 }
 
 .file-picker {

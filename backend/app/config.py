@@ -61,8 +61,8 @@ class Settings(BaseSettings):
     storage_dir: Path = Field(default=REPO_ROOT / "storage")
     secrets_dir: Path = Field(default=REPO_ROOT / "secrets")
     max_upload_size_mb: int = Field(default=20, ge=1, le=100)
-    page_image_max_edge_px: int = Field(default=1600, ge=512, le=4096)
-    page_image_webp_quality: int = Field(default=85, ge=50, le=100)
+    page_image_max_edge_px: int = Field(default=2400, ge=512, le=4096)
+    page_image_webp_quality: int = Field(default=90, ge=50, le=100)
 
     backend_host: str = Field(default="127.0.0.1")
     backend_port: int = Field(default=8000, ge=1, le=65535)

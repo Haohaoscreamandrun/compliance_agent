@@ -62,4 +62,21 @@ describe('BboxSvgViewerComponent', () => {
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('[role="alert"]')?.textContent).toContain('無法載入頁面影像');
   });
+
+  it('supports zoom controls and magnifier loupe toggle', () => {
+    expect(component.zoomPercent()).toBe(100);
+    component.zoomIn();
+    expect(component.zoomPercent()).toBe(125);
+    component.zoomOut();
+    expect(component.zoomPercent()).toBe(100);
+    component.zoomIn();
+    component.resetZoom();
+    expect(component.zoomPercent()).toBe(100);
+
+    expect(component.magnifierActive()).toBeFalse();
+    component.toggleMagnifier();
+    expect(component.magnifierActive()).toBeTrue();
+    component.toggleMagnifier();
+    expect(component.magnifierActive()).toBeFalse();
+  });
 });

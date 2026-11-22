@@ -88,6 +88,7 @@ class Document(Base):
             "uq_documents_active_baseline",
             "reg_no",
             "doc_type",
+            "volume_tag",
             unique=True,
             postgresql_where=text("is_active_baseline IS TRUE AND reg_no IS NOT NULL"),
         ),
@@ -97,6 +98,8 @@ class Document(Base):
     filename: Mapped[str] = mapped_column(String(256), nullable=False)
     doc_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     reg_no: Mapped[str | None] = mapped_column(String(32), index=True)
+    volume_tag: Mapped[str] = mapped_column(String(64), nullable=False, default="", server_default="")
+    content_sha256: Mapped[str | None] = mapped_column(String(64), index=True)
     common_name: Mapped[str | None] = mapped_column(String(128), index=True)
     pesticide_code: Mapped[str | None] = mapped_column(String(32), index=True)
     company_name: Mapped[str | None] = mapped_column(String(128), index=True)
@@ -178,3 +181,34 @@ class DocumentClause(Base):
     box_2d: Mapped[list[int]] = mapped_column(JSONB, nullable=False)
 
     document: Mapped[Document] = relationship(back_populates="clauses")
+
+
+class EntityAlias(Base):
+    """Confirmed or rejected bilingual entity-name equivalence (e.g. 中文持有人 <-> English LoA entity)."""
+
+    __tablename__ = "entity_aliases"
+    __table_args__ = (
+        UniqueConstraint("zh_name", "en_name", name="uq_entity_alias_pair"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    zh_name: Mapped[str] = mapped_column(String(256), nullable=False, index=True)
+    en_name: Mapped[str] = mapped_column(String(256), nullable=False, index=True)
+    confirmed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utc_now
+    )
+
+
+class AuditReportCache(Base):
+    """Cached ComplianceAuditReport keyed by reg_no + participating document/MOA/alias fingerprint."""
+
+    __tablename__ = "audit_reports"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    reg_no: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    cache_key: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    report_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utc_now
+    )

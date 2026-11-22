@@ -624,6 +624,14 @@ def _check_factory_and_moa(
             )
 
 
+def _entities_match(a: str, b: str, aliases: set[tuple[str, str]]) -> bool:
+    if a == b:
+        return True
+    na = _norm_ws(a).casefold()
+    nb = _norm_ws(b).casefold()
+    return (na, nb) in aliases or (nb, na) in aliases
+
+
 def _check_local_entity(
     findings: list[CascadeDiffFinding],
     label: ProductLabelExtraction | None,
@@ -631,17 +639,19 @@ def _check_local_entity(
     change_cert: NotarizedCertExtraction | None,
     cert_doc_id: str | None,
     moa: MoaRegistry | None,
+    confirmed_aliases: set[tuple[str, str]] | None = None,
 ) -> None:
+    aliases = {(_norm_ws(z).casefold(), _norm_ws(e).casefold()) for z, e in (confirmed_aliases or ())}
     label_local = _gf_str(label.local_permit_holder_name if label else None)
     loa_local_gf = change_cert.authorized_entity_name if change_cert else None
     loa_local = _gf_str(loa_local_gf)
     moa_local = _norm_ws(moa.company_name) if moa else ""
 
     if label is not None and label_doc_id:
-        if loa_local and label_local != loa_local:
+        if loa_local and not _entities_match(label_local, loa_local, aliases):
             if moa is None:
                 status: ActionStatus = "verify_warning"
-            elif moa_local == loa_local:
+            elif _entities_match(moa_local, loa_local, aliases):
                 status = "must_update"
             else:
                 status = "pending_moa_approval"
@@ -657,7 +667,15 @@ def _check_local_entity(
                     supporting_citations=_cites((cert_doc_id, loa_local_gf)) if cert_doc_id else [],
                 )
             )
-        if moa_local and label_local != moa_local and not (loa_local and loa_local == moa_local and label_local != loa_local):
+        if (
+            moa_local
+            and not _entities_match(label_local, moa_local, aliases)
+            and not (
+                loa_local
+                and _entities_match(loa_local, moa_local, aliases)
+                and not _entities_match(label_local, loa_local, aliases)
+            )
+        ):
             findings.append(
                 CascadeDiffFinding(
                     field_name="國內許可證持有人 / 總代理名稱",
@@ -667,11 +685,13 @@ def _check_local_entity(
                     recommended_new_value=moa_local,
                     rationale=f"Label holder ('{label_local}') differs from MOA registered company ('{moa_local}').",
                     current_label_citation=_cite(label_doc_id, label.local_permit_holder_name),
-                    supporting_citations=_cites((cert_doc_id, loa_local_gf)) if (cert_doc_id and loa_local == label_local) else [],
+                    supporting_citations=_cites((cert_doc_id, loa_local_gf))
+                    if (cert_doc_id and _entities_match(loa_local, label_local, aliases))
+                    else [],
                 )
             )
 
-    if loa_local and cert_doc_id and moa is not None and moa_local and loa_local != moa_local:
+    if loa_local and cert_doc_id and moa is not None and moa_local and not _entities_match(loa_local, moa_local, aliases):
         findings.append(
             CascadeDiffFinding(
                 field_name="MOA 登記國內業者同步狀態",
@@ -983,6 +1003,7 @@ def run_cascade_diff(
     extra_certs: list[tuple[str, NotarizedCertExtraction]] | None = None,
     moa: MoaRegistry | None = None,
     official_letters: list[tuple[str, OfficialLetterExtraction]] | None = None,
+    confirmed_aliases: set[tuple[str, str]] | None = None,
 ) -> list[CascadeDiffFinding]:
     """Run deterministic compliance checks across all available regulatory sources for `reg_no`."""
     canon_reg, l_id, m_id, c_id, letters = _validate_inputs(
@@ -1043,12 +1064,12 @@ def run_cascade_diff(
                 moa,
             )
             _check_factory_and_moa(findings, label, l_id, cert, cid, moa)
-            _check_local_entity(findings, label, l_id, cert, cid, moa)
+            _check_local_entity(findings, label, l_id, cert, cid, moa, confirmed_aliases)
         _check_cert_cross_consistency(findings, active_certs)
     else:
         _check_product_linkage(findings, canon_reg, label, l_id, msds, m_id, None, None, moa)
         _check_factory_and_moa(findings, label, l_id, None, None, moa)
-        _check_local_entity(findings, label, l_id, None, None, moa)
+        _check_local_entity(findings, label, l_id, None, None, moa, confirmed_aliases)
 
     _check_msds_ghs_drift(findings, label, l_id, msds, m_id)
     _check_aphia_and_letters(findings, canon_reg, label, l_id, msds, letters, moa)
