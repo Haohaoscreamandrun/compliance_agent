@@ -9,7 +9,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { background, BackgroundHandle, contour } from 'asciify-engine/kit';
+import { background, BackgroundHandle, contour, fluid } from 'asciify-engine/kit';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -85,16 +85,7 @@ export class AppComponent implements OnInit {
 
   constructor() {
     afterNextRender(() => {
-      const host = this.contourHost()?.nativeElement;
-      if (!host) return;
-      this.contourBg = background(host, {
-        preset: contour,
-        palette: { light: '#6f877d', dark: '#5ec2d8' },
-        accent: '#1b6c80',
-        cursor: false,
-        lazy: false,
-        speed: 0.6,
-      });
+      this.mountBackdrop(this.theme());
     });
 
     this.destroyRef.onDestroy(() => {
@@ -298,7 +289,7 @@ export class AppComponent implements OnInit {
       DocumentUploadResponse[] | null
     >(UploadDialogComponent, {
       data: { defaultRegNo: this.regNo() },
-      width: 'auto',
+      width: 'min(580px, 94vw)',
       maxWidth: '94vw',
       panelClass: 'wide-upload-dialog',
     });
@@ -403,8 +394,32 @@ export class AppComponent implements OnInit {
     const next = this.theme() === 'light' ? 'dark' : 'light';
     this.theme.set(next);
     this.applyTheme(next);
-    this.contourBg?.update({
-      ink: next === 'dark' ? '#5ec2d8' : '#6f877d',
+    this.mountBackdrop(next);
+  }
+
+  private mountBackdrop(mode: 'light' | 'dark'): void {
+    this.contourBg?.destroy();
+    this.contourBg = undefined;
+    const host = this.contourHost()?.nativeElement;
+    if (!host) return;
+    if (mode === 'light') {
+      this.contourBg = background(host, {
+        preset: fluid,
+        palette: '#ff7a59',
+        speed: 1,
+        cellSize: 7,
+        opacity: 0.7,
+        lazy: false,
+      });
+      return;
+    }
+    this.contourBg = background(host, {
+      preset: contour,
+      palette: '#5ec2d8',
+      accent: '#1b6c80',
+      cursor: false,
+      lazy: false,
+      speed: 0.6,
     });
   }
 
