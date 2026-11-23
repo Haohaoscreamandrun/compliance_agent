@@ -58,6 +58,20 @@ describe('AppComponent', () => {
     expect(component.viewerPage()).toBe(2);
   });
 
+  it('toggles theme cleanly and cleans up backdrop on destroy', () => {
+    fixture.detectChanges();
+    httpMock.expectOne('/api/documents?limit=50').flush([]);
+    httpMock.expectOne('/api/entity-aliases').flush([]);
+
+    const initial = component.theme();
+    component.toggleTheme();
+    const toggled = component.theme();
+    expect(toggled).not.toBe(initial);
+    expect(document.documentElement.getAttribute('data-theme')).toBe(toggled);
+
+    expect(() => fixture.destroy()).not.toThrow();
+  });
+
   it('loadBaselines fetches MOA and active baseline docs and reveals audit trigger', () => {
     fixture.detectChanges();
     httpMock.expectOne('/api/documents?limit=50').flush([]);

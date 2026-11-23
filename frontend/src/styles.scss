@@ -10,24 +10,24 @@
   --font-sans: 'IBM Plex Sans', 'Noto Sans TC', 'Microsoft JhengHei', system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* Tinted botanical-slate chrome frame + translucent workspace sheet & cards */
-  --surface-bg-light: #ebf1ed;
+  /* Warm coral-tinted light frame + cool botanical-slate dark frame */
+  --surface-bg-light: #faf5f3;
   --surface-bg-dark: #0e1311;
   --surface-solid-light: #ffffff;
   --surface-solid-dark: #161b18;
-  --surface-sheet-light: rgba(255, 255, 255, 0.56);
-  --surface-sheet-dark: rgba(18, 23, 20, 0.48);
-  --surface-card-light: rgba(255, 255, 255, 0.74);
-  --surface-card-dark: rgba(22, 27, 24, 0.64);
-  --surface-raised-light: rgba(242, 246, 244, 0.78);
+  --surface-sheet-light: rgba(255, 255, 255, 0.34);
+  --surface-sheet-dark: rgba(18, 23, 20, 0.28);
+  --surface-card-light: rgba(255, 255, 255, 0.62);
+  --surface-card-dark: rgba(22, 27, 24, 0.50);
+  --surface-raised-light: rgba(252, 245, 242, 0.80);
   --surface-raised-dark: rgba(29, 36, 32, 0.70);
-  --text-primary-light: #131614;
+  --text-primary-light: #1a1513;
   --text-primary-dark: #edf2ef;
-  --text-muted-light: #57605b;
+  --text-muted-light: #635753;
   --text-muted-dark: #97a39d;
-  --border-subtle-light: #d8e2dc;
+  --border-subtle-light: #eadbd6;
   --border-subtle-dark: #28322d;
-  --accent-light: #1b6c80;
+  --accent-light: #c84b2b;
   --accent-dark: #5ec2d8;
   --sheet-shadow-light: none;
   --sheet-shadow-dark: none;
@@ -109,8 +109,8 @@
 
   @include mat.theme((
     color: (
-      theme-type: color-scheme,
-      primary: mat.$cyan-palette,
+      theme-type: light,
+      primary: mat.$orange-palette,
     ),
     typography: (
       plain-family: var(--font-sans),
@@ -122,6 +122,13 @@
 
 :root[data-theme='dark'] {
   color-scheme: dark;
+
+  @include mat.theme((
+    color: (
+      theme-type: dark,
+      primary: mat.$cyan-palette,
+    ),
+  ));
 }
 
 :root[data-theme='light'] {

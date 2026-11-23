@@ -49,40 +49,40 @@
         </mat-form-field>
 
         <mat-form-field appearance="outline" subscriptSizing="dynamic">
-          <mat-label>許可證字號（多產品 LoA/MoC 可留空；other 類型必填）</mat-label>
+          <mat-label>許可證字號</mat-label>
           <input
             matInput
             type="text"
             [ngModel]="entry.regNo"
             (ngModelChange)="onFieldChange(entry.id, 'regNo', $event)"
             [name]="'regNo_' + entry.id"
-            placeholder="例：農藥進00569"
+            placeholder="例：農藥進00569（多產品 LoA/MoC 可留空）"
           />
         </mat-form-field>
 
         @if (entry.docType === 'label') {
           <mat-form-field appearance="outline" subscriptSizing="dynamic">
-            <mat-label>包裝容量標籤（選填，多容量基準用，例：1kg / 2kg）</mat-label>
+            <mat-label>包裝容量標籤（選填）</mat-label>
             <input
               matInput
               type="text"
               [ngModel]="entry.volumeTag"
               (ngModelChange)="onFieldChange(entry.id, 'volumeTag', $event)"
               [name]="'volumeTag_' + entry.id"
-              placeholder="留空則自動擷取淨重/容量"
+              placeholder="多容量基準用（例：1kg / 2kg），留空自動擷取"
             />
           </mat-form-field>
         }
 
         <mat-form-field appearance="outline" subscriptSizing="dynamic">
-          <mat-label>人工備註（選填，建議用於 other 類型證明）</mat-label>
+          <mat-label>人工備註（選填）</mat-label>
           <input
             matInput
             type="text"
             [ngModel]="entry.manualNotes"
             (ngModelChange)="onFieldChange(entry.id, 'manualNotes', $event)"
             [name]="'manualNotes_' + entry.id"
-            placeholder="補充說明或變更目的"
+            placeholder="補充說明或變更目的（other 類型建議填寫）"
           />
         </mat-form-field>
 
