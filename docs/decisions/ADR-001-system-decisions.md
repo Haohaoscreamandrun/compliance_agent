@@ -98,3 +98,17 @@ Every compliance finding must carry exact spatial provenance (`[doc_id, page, bo
 * **Forfeited / Deferred Alternatives:**
   * *Cloudflare Dashboard WAF Rate Limiting Rules:* Require a custom domain Zone proxied through Cloudflare and cannot target `*.workers.dev`; per-user Gemini `POST` rate limiting is deferred to a Workers `ratelimits` binding in `src/worker.ts` + `wrangler.jsonc` (Post-MVP).
   * *Static `WRITE_ACCESS_TOKEN` for UI users:* Angular does not prompt for an API token header, so Zero Trust Access (`Cf-Access-Jwt-Assertion`) is preferred for interactive browser users while `WRITE_ACCESS_TOKEN` remains available for headless API clients.
+
+---
+
+## Decision 7 — APHIA Announcements, Crop-Usage Verification, Side-by-Side Diff & Gemini Fallback (Component 10)
+
+* **Context:** MOA `EIR027` (`PesticideData.aspx`) does not expose APHIA official announcements (`農藥公告`), banned/carcinogen lists, or 15-year ACRI chemical risk assessments, and multi-crop labels require verifying registered crop/pest/dosage rows against MOA `approved_usages_json` without cluttering the main compliance checklist.
+* **Chosen Architecture:**
+  * **APHIA Multi-Source Client & Migration (`backend/app/services/aphia_client.py`, `backend/alembic/versions/002_aphia_records.py`):** Queries APHIA announcements, 15-year chemical assessments + pre-notices, and parses the official carcinogen PDF with evaluation dates persisted in PostgreSQL (`moa_registry.approved_usages_json` aligned in both `002_aphia_records.py` and `session.py` startup).
+  * **Label Crop-Usage Diff & Tab Split (`extraction.py`, `tools.py`, `copilot.py`, `copilot-audit-panel.component.html`):** Extracts structured crop-usage rows from product labels, compares them deterministically against MOA `approved_usages_json`, and surfaces unregistered crop usages in a dedicated `未登載使用範圍` `mat-tab` separate from the main field checklist.
+  * **Side-by-Side `查看差異` Viewer (`bbox-svg-viewer.component.*`, `copilot-audit-panel.component.html`):** Replaces per-citation coordinate buttons with a single `查看差異` action per finding that opens side-by-side document comparison with synchronized `<svg viewBox="0 0 1000 1000">` bounding-box highlights.
+  * **Gemini Observability & Fallback Chain (`backend/app/config.py`, `parser.py`, `copilot.py`):** Logs active model name, latency, and token usage on successful Gemini calls, and configures `gemini_parse_fallback_models` to `["gemini-3.6-flash", "gemini-3.5-flash-lite"]` behind `gemini-3.8-flash`.
+* **Forfeited Alternatives:**
+  * *Inline Crop-Usage Rows in the Main Checklist Table:* Mixing dozens of crop/pest rows into the primary label-field table obscures core registration mismatches; isolating them into `未登載使用範圍` keeps the primary audit scannable.
+  * *Per-Citation Button Clusters:* Multiple inline `p.N` buttons per row created visual clutter and forced manual tab-switching between source documents; a single `查看差異` side-by-side view surfaces both compared documents at once.
