@@ -216,7 +216,7 @@ async def run_compliance_audit(
         response_mime_type="application/json",
         response_json_schema=ComplianceAuditReport.model_json_schema(),
     )
-    phase2_resp, _ = await _generate_with_5xx_fallback(
+    phase2_resp, phase2_model = await _generate_with_5xx_fallback(
         client,
         candidate_models,
         [json.dumps(evidence_bundle, ensure_ascii=False)],
@@ -247,6 +247,15 @@ async def run_compliance_audit(
         overall = "needs_verification"
     else:
         overall = "compliant"
+
+    log.info(
+        "Copilot audit complete reg_no=%s model=%s status=%s basic_items=%d crop_items=%d",
+        canon_reg,
+        phase2_model,
+        overall,
+        len(toolset.last_findings),
+        len(crop_items),
+    )
 
     return report.model_copy(
         update={

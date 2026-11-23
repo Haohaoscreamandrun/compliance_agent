@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     gemini_api_key: str = Field(default="")
     gemini_parse_model: str = Field(default="gemini-3.8-flash")
     gemini_parse_fallback_models: Annotated[list[str], NoDecode] = Field(
-        default_factory=lambda: ["gemini-3.7-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
+        default_factory=lambda: ["gemini-3.6-flash", "gemini-3.5-flash-lite"]
     )
     gemini_parse_lite_model: str = Field(default="gemini-3.5-flash-lite")
     gemini_copilot_model: str = Field(default="gemini-3.8-flash")

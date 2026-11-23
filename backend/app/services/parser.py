@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any, NamedTuple
 
 import httpx
@@ -175,11 +176,22 @@ async def _generate_with_5xx_fallback(
     """Call Gemini, failing over to fallback models only on transient 5xx/503 ServerError."""
     last_error: Exception | None = None
     for idx, model in enumerate(candidate_models):
+        t0 = time.monotonic()
         try:
             response = await client.aio.models.generate_content(
                 model=model,
                 contents=contents,
                 config=config,
+            )
+            usage = getattr(response, "usage_metadata", None)
+            log.info(
+                "Gemini call ok model=%s fallback=%s elapsed_ms=%.0f prompt_tokens=%s output_tokens=%s total_tokens=%s",
+                model,
+                idx > 0,
+                (time.monotonic() - t0) * 1000,
+                getattr(usage, "prompt_token_count", None),
+                getattr(usage, "candidates_token_count", None),
+                getattr(usage, "total_token_count", None),
             )
             return response, model
         except (genai_errors.ServerError, httpx.TimeoutException, TimeoutError) as exc:

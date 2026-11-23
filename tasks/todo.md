@@ -56,7 +56,15 @@
 ## Component 9: Framed-Sheet UI Polish & Typography
 
 - [x] **CL 9.1 (`feat(ui)`):** Apply `design-taste-frontend` (`framed-sheet` layout, IBM Plex Sans/Mono + Noto Sans TC, SVG botanical compliance monogram), Light/Dark theme toggle (light default), opaque document library drawer, and `asciify-engine` `contour` animated backdrop with translucent workspace sheet, cards, and dialogs (`styles.scss`, `index.html`, `app.component.*`, `copilot-audit-panel.component.scss`, `bbox-svg-viewer.component.scss`, `package.json`).
-- [ ] **Checkpoint / PR #9:** Review & merge `develop` → `main` for Component 9.
+- [x] **Checkpoint / PR #9:** Review & merge `develop` → `main` for Component 9 (merged via PR #13 `c6019cc`).
+
+## Component 10: APHIA Regulatory Lookup, Crop Usage Diff & Audit UX (Post-MVP #1)
+
+- [x] **CL 10.1 (`feat(aphia)`):** Add `aphia_client.py` + `002_aphia_records.py` migration for APHIA announcements, banned/carcinogen PDF parsing, 15-year assessments + pre-notices, evaluation dates, and `moa_registry.approved_usages_json` schema alignment (`session.py`, `routes_registry.py`, `routes_copilot.py`, `test_aphia_client.py`).
+- [x] **CL 10.2 (`feat(crop-usage)`):** Extract label crop-usage tables (`extraction.py`, `extraction_prompts.py`), compare against MOA `approved_usages_json` (`tools.py`, `copilot.py`), and split findings into a dedicated `未登載使用範圍` `mat-tab` (`copilot-audit-panel.component.*`).
+- [x] **CL 10.3 (`feat(ui-diff)`):** Replace per-citation buttons with a single `查看差異` side-by-side BBox viewer (`bbox-svg-viewer.component.*`, `app.component.*`) and widen the multi-entry upload dialog (`upload-dialog.component.scss`).
+- [x] **CL 10.4 (`feat(observability,config)`):** Log Gemini model, latency, and token usage on success (`parser.py`, `copilot.py`, `main.py`) and set confirmed-active fallback chain `["gemini-3.6-flash", "gemini-3.5-flash-lite"]` (`config.py`).
+- [ ] **Checkpoint / PR #10:** Push `develop` (`b113584`–`1c233c4` + Component 10 docs) and merge `develop` → `main`.
 
 ## Future Enhancements (Post-MVP)
 

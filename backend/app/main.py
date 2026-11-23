@@ -19,6 +19,7 @@ from app.config import Settings
 from app.db.session import build_async_engine, build_session_factory, init_db_schema
 from app.services.genai_client import build_genai_client
 
+logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s: %(message)s")
 log = logging.getLogger(__name__)
 
 
