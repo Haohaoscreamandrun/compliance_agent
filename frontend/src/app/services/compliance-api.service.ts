@@ -3,6 +3,7 @@ import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 
 import {
+  AphiaLookupResponse,
   ComplianceAuditReport,
   DocType,
   DocumentSummary,
@@ -30,6 +31,14 @@ export class ComplianceApiService {
   lookupRegistry(regNo: string): Observable<RegistryLookupResponse> {
     return this.http.get<RegistryLookupResponse>(
       `${this.baseUrl}/registry/${encodeURIComponent(regNo.trim())}`,
+    );
+  }
+
+  lookupAphia(regNo: string, refresh = false): Observable<AphiaLookupResponse> {
+    const params = refresh ? new HttpParams().set('refresh', 'true') : undefined;
+    return this.http.get<AphiaLookupResponse>(
+      `${this.baseUrl}/registry/${encodeURIComponent(regNo.trim())}/aphia`,
+      { params },
     );
   }
 

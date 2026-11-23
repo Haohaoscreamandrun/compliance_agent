@@ -24,7 +24,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatToolbarModule } from '@angular/material/toolbar';
-import { catchError, of, Subscription, switchMap } from 'rxjs';
+import { catchError, forkJoin, of, Subscription, switchMap } from 'rxjs';
 
 import { BboxSvgViewerComponent } from './components/bbox-svg-viewer/bbox-svg-viewer.component';
 import { CopilotAuditPanelComponent } from './components/copilot-audit-panel/copilot-audit-panel.component';
@@ -37,6 +37,7 @@ import {
   UploadDialogData,
 } from './components/upload-dialog/upload-dialog.component';
 import {
+  AphiaLookupResponse,
   CitationRef,
   ComplianceAuditReport,
   DocType,
@@ -100,6 +101,7 @@ export class AppComponent implements OnInit {
   // Permit, MOA & Pulled Baselines state
   readonly regNo = signal('農藥進00569');
   readonly moaSnapshot = signal<RegistryLookupResponse | null>(null);
+  readonly aphiaSnapshot = signal<AphiaLookupResponse | null>(null);
   readonly baselinesLoaded = signal(false);
   readonly baselineDocs = signal<DocumentSummary[]>([]);
   readonly baselinesLoading = signal(false);
@@ -177,6 +179,7 @@ export class AppComponent implements OnInit {
     this.baselinesError.set(null);
     this.baselinesLoaded.set(true);
     this.moaSnapshot.set(null);
+    this.aphiaSnapshot.set(null);
     this.auditReport.set(null);
     this.auditError.set(null);
 
@@ -190,18 +193,24 @@ export class AppComponent implements OnInit {
           if (snap) {
             this.moaSnapshot.set(snap);
           }
-          return this.api.listDocuments({
-            reg_no: target,
-            is_active_baseline: true,
-            include_shared_certs: true,
-            limit: 50,
+          return forkJoin({
+            docs: this.api.listDocuments({
+              reg_no: target,
+              is_active_baseline: true,
+              include_shared_certs: true,
+              limit: 50,
+            }),
+            aphia: snap
+              ? this.api.lookupAphia(target).pipe(catchError(() => of(null)))
+              : of(null),
           });
         }),
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe({
-        next: (docs) => {
+        next: ({ docs, aphia }) => {
           this.baselineDocs.set(docs);
+          this.aphiaSnapshot.set(aphia);
           this.baselinesLoading.set(false);
           this.api
             .getCachedAuditReport(target)
@@ -387,6 +396,23 @@ export class AppComponent implements OnInit {
             });
         });
       break;
+    }
+  }
+
+  aphiaKindLabel(kind: string): string {
+    switch (kind) {
+      case 'forbid_banned':
+        return '禁用農藥';
+      case 'forbid_restricted':
+        return '限用農藥';
+      case 'forbid_deleted':
+        return '刪除農藥';
+      case 'carcinogen':
+        return '可能致癌';
+      case 'assessment':
+        return '評估資料';
+      default:
+        return '農藥公告';
     }
   }
 

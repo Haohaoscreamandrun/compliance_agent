@@ -12,6 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
 from app.db.session import get_db_session
+from app.services.aphia_client import (
+    extract_ingredient_tokens,
+    lookup_aphia_for_tokens,
+    sync_aphia_catalog,
+)
 from app.services.cascade_diff import validate_reg_no
 from app.services.moa_client import (
     MoaNotFoundError,
@@ -38,6 +43,72 @@ class RegistryLookupResponse(BaseModel):
     revocation_status: str | None = None
     stale: bool
     fetched_at: datetime
+
+
+class AphiaRecordItem(BaseModel):
+    source_kind: str
+    source_key: str
+    title: str
+    common_name: str | None = None
+    published_date: str | None = None
+    detail_url: str | None = None
+
+
+class AphiaLookupResponse(BaseModel):
+    reg_no: str
+    keywords: list[str]
+    forbid_matches: list[AphiaRecordItem]
+    assessment_matches: list[AphiaRecordItem]
+    announcements: list[AphiaRecordItem]
+    stale: bool
+    fetched_at: datetime
+
+
+@router.get("/{reg_no}/aphia", response_model=AphiaLookupResponse)
+async def lookup_aphia_by_reg_no(
+    reg_no: str,
+    request: Request,
+    refresh: bool = False,
+    session: AsyncSession = Depends(get_db_session),
+) -> AphiaLookupResponse:
+    """Lookup APHIA banned/restricted/carcinogen lists, assessments & announcements for `reg_no`."""
+    try:
+        canon_reg = validate_reg_no(reg_no)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    settings: Settings = request.app.state.settings
+    http: httpx.AsyncClient = request.app.state.http_client
+    try:
+        moa_res = await get_registry_snapshot(session, http, settings.moa_api_base_url, canon_reg)
+    except MoaNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except MoaUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    snap = moa_res.snapshot
+    tokens = extract_ingredient_tokens(snap.chinese_name, snap.english_name)
+    aphia = await lookup_aphia_for_tokens(session, http, tokens, force_refresh=refresh)
+    return AphiaLookupResponse(
+        reg_no=canon_reg,
+        keywords=aphia["keywords"],
+        forbid_matches=[AphiaRecordItem(**r) for r in aphia["forbid_matches"]],
+        assessment_matches=[AphiaRecordItem(**r) for r in aphia["assessment_matches"]],
+        announcements=[AphiaRecordItem(**r) for r in aphia["announcements"]],
+        stale=aphia["stale"],
+        fetched_at=aphia["fetched_at"],
+    )
+
+
+@router.post("/aphia/sync")
+async def sync_aphia_records(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, int]:
+    """Sync APHIA static/recent tables into PostgreSQL aphia_records."""
+    http: httpx.AsyncClient = request.app.state.http_client
+    synced = await sync_aphia_catalog(session, http)
+    return {"synced": synced}
 
 
 @router.get("/{reg_no}", response_model=RegistryLookupResponse)

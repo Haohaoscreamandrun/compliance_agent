@@ -147,6 +147,8 @@ def test_postgresql_jsonb_ddl_and_cascade_constraints() -> None:
         "document_clauses",
         "entity_aliases",
         "audit_reports",
+        "aphia_records",
+        "aphia_query_cache",
     }
     assert set(Base.metadata.tables.keys()) == expected_tables
 

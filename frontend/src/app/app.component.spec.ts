@@ -72,6 +72,38 @@ describe('AppComponent', () => {
     expect(() => fixture.destroy()).not.toThrow();
   });
 
+  it('loads APHIA details after MOA lookup without blocking on APHIA error', () => {
+    fixture.detectChanges();
+    httpMock.expectOne('/api/documents?limit=50').flush([]);
+    httpMock.expectOne('/api/entity-aliases').flush([]);
+
+    component.loadBaselines();
+    httpMock.expectOne('/api/registry/%E8%BE%B2%E8%97%A5%E9%80%B200569').flush({
+      reg_no: '農藥進00569',
+      permit_type: '農藥進',
+      permit_number: '00569',
+      chinese_name: '嘉磷塞',
+      english_name: 'Glyphosate',
+      stale: false,
+      fetched_at: '2026-11-23T00:00:00Z',
+    });
+    httpMock
+      .expectOne(
+        '/api/documents?reg_no=%E8%BE%B2%E8%97%A5%E9%80%B200569&is_active_baseline=true&include_shared_certs=true&limit=50',
+      )
+      .flush([]);
+    httpMock
+      .expectOne('/api/registry/%E8%BE%B2%E8%97%A5%E9%80%B200569/aphia')
+      .flush('upstream error', { status: 503, statusText: 'Service Unavailable' });
+    httpMock
+      .expectOne('/api/copilot/audit/%E8%BE%B2%E8%97%A5%E9%80%B200569')
+      .flush(null, { status: 404, statusText: 'Not Found' });
+
+    expect(component.moaSnapshot()?.chinese_name).toBe('嘉磷塞');
+    expect(component.aphiaSnapshot()).toBeNull();
+    expect(component.baselinesLoading()).toBeFalse();
+  });
+
   it('loadBaselines fetches MOA and active baseline docs and reveals audit trigger', () => {
     fixture.detectChanges();
     httpMock.expectOne('/api/documents?limit=50').flush([]);
@@ -114,6 +146,17 @@ describe('AppComponent', () => {
         uploaded_at: '2026-11-22T00:00:00Z',
       },
     ]);
+    httpMock
+      .expectOne('/api/registry/%E8%BE%B2%E8%97%A5%E9%80%B200569/aphia')
+      .flush({
+        reg_no: '農藥進00569',
+        keywords: ['可濕性硫黃', 'SULFUR'],
+        forbid_matches: [],
+        assessment_matches: [],
+        announcements: [],
+        stale: false,
+        fetched_at: '2026-11-23T00:00:00Z',
+      });
     expect(component.baselineDocs().length).toBe(1);
 
     httpMock

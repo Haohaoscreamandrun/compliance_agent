@@ -97,3 +97,22 @@ export interface DocumentUploadResponse extends DocumentSummary {
   used_fallback: boolean;
   extracted_data: Record<string, unknown>;
 }
+
+export interface AphiaRecordItem {
+  source_kind: string;
+  source_key: string;
+  title: string;
+  common_name: string | null;
+  published_date: string | null;
+  detail_url: string | null;
+}
+
+export interface AphiaLookupResponse {
+  reg_no: string;
+  keywords: string[];
+  forbid_matches: AphiaRecordItem[];
+  assessment_matches: AphiaRecordItem[];
+  announcements: AphiaRecordItem[];
+  stale: boolean;
+  fetched_at: string;
+}

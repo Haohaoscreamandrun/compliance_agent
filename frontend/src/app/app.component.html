@@ -190,6 +190,64 @@
         </mat-card>
       }
 
+      @if (aphiaSnapshot(); as aphia) {
+        <mat-card appearance="outlined" class="aphia-card" aria-label="APHIA 公告與評估資訊">
+          <details class="aphia-details" [open]="aphia.forbid_matches.length > 0">
+            <summary class="aphia-summary">
+              <span>
+                <strong>APHIA 公告與評估</strong>
+                @if (aphia.forbid_matches.length > 0) {
+                  <span class="aphia-badge is-alert">禁/限用/致癌提醒 ({{ aphia.forbid_matches.length }})</span>
+                } @else {
+                  <span class="aphia-badge">禁限用 0 · 評估 {{ aphia.assessment_matches.length }} · 公告 {{ aphia.announcements.length }}</span>
+                }
+                @if (aphia.stale) {
+                  <span class="stale-badge">快取</span>
+                }
+              </span>
+            </summary>
+            <div class="aphia-body">
+              @for (item of aphia.forbid_matches; track item.source_key) {
+                <div class="aphia-row">
+                  <span class="aphia-badge is-alert">{{ aphiaKindLabel(item.source_kind) }}</span>
+                  <span>{{ item.title }}</span>
+                  @if (item.published_date) {
+                    <span class="doc-meta">{{ item.published_date }}</span>
+                  }
+                  @if (item.detail_url) {
+                    <a [href]="item.detail_url" target="_blank" rel="noopener noreferrer">來源</a>
+                  }
+                </div>
+              }
+              @for (item of aphia.assessment_matches; track item.source_key) {
+                <div class="aphia-row">
+                  <span class="aphia-badge">{{ aphiaKindLabel(item.source_kind) }}</span>
+                  <span>{{ item.title }}</span>
+                  @if (item.detail_url) {
+                    <a [href]="item.detail_url" target="_blank" rel="noopener noreferrer">來源</a>
+                  }
+                </div>
+              }
+              @for (item of aphia.announcements; track item.source_key) {
+                <div class="aphia-row">
+                  <span class="aphia-badge">{{ aphiaKindLabel(item.source_kind) }}</span>
+                  <span>{{ item.title }}</span>
+                  @if (item.published_date) {
+                    <span class="doc-meta">{{ item.published_date }}</span>
+                  }
+                  @if (item.detail_url) {
+                    <a [href]="item.detail_url" target="_blank" rel="noopener noreferrer">來源</a>
+                  }
+                </div>
+              }
+              @if (aphia.forbid_matches.length === 0 && aphia.assessment_matches.length === 0 && aphia.announcements.length === 0) {
+                <p class="empty-docs">查無對應成分之禁用、限用、致癌或近期公告紀錄。</p>
+              }
+            </div>
+          </details>
+        </mat-card>
+      }
+
       @if (baselinesLoaded()) {
         <mat-card appearance="outlined" class="baselines-card" aria-label="基準文件清單">
           <header class="baselines-header">
