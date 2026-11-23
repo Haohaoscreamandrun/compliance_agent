@@ -37,7 +37,11 @@ Do not guess any regulatory facts before running all relevant tools."""
 _PHASE2_SYSTEM_PROMPT = """You are synthesizing a Taiwan Agrochemical Label Compliance Audit Report.
 Produce `ComplianceAuditReport` JSON grounded strictly in the provided deterministic diff findings and tool outputs.
 Write concise, accurate `executive_summary_zh` (Traditional Chinese) and `executive_summary_en` (English).
-Preserve every `field_name`, `category`, `action_status`, and `[doc_id, page, box_2d]` citation verbatim."""
+Preserve every deterministic `field_name`, `category`, `action_status`, and `[doc_id, page, box_2d]` citation verbatim.
+Additionally, if `crop_usage_comparison.moa_approved_usages` is non-empty and `crop_usage_comparison.label_crop_usages` is provided, compare the label's crop-usage table against MOA `approved_usages_json` and emit `checklist_items` with `category="crop_usage_sync"` for:
+1. Wrong numbers (`action_status="must_update"`): mismatched dilution ratio (`稀釋倍數`), dosage per ha (`每公頃使用用藥量`), interval (`施藥間隔`), application count (`施用次數`), or PHI (`安全採收期`). Ground `current_label_citation` to that printed label cell's `{doc_id, page, box_2d, verbatim_quote}`.
+2. Different wording (`action_status="verify_warning"`): differing crop/pest/timing/notes wording (`作物名稱`, `病蟲害名稱`, `使用時期`, `注意事項`/`備註`).
+3. Allowed but not displayed (`action_status="verify_warning"`, `current_label_citation: null`): list MOA-allowed `(作物名稱, 病蟲害名稱)` entries absent from the label so the user knows which allowed crops are omitted due to label layout space."""
 
 
 def _tool_declarations() -> list[types.FunctionDeclaration]:
@@ -192,6 +196,7 @@ async def run_compliance_audit(
     diff_payload = await toolset.run_compliance_diff(canon_reg)
 
     # --- Phase 2: Constrained Decoding into ComplianceAuditReport ---
+    crop_evidence = toolset.build_crop_usage_evidence() if hasattr(toolset, "build_crop_usage_evidence") else {}
     evidence_bundle = {
         "reg_no": canon_reg,
         "product_name_zh": toolset.moa_chinese_name or toolset.label_common_name,
@@ -200,6 +205,10 @@ async def run_compliance_audit(
         "msds_doc_id_used": toolset.msds_doc_id_used,
         "audit_warnings": toolset.warnings,
         "deterministic_diff": diff_payload,
+        "crop_usage_comparison": {
+            "label_crop_usages": crop_evidence.get("label_crop_usages", []),
+            "moa_approved_usages": crop_evidence.get("moa_approved_usages", []),
+        },
     }
     phase2_config = types.GenerateContentConfig(
         system_instruction=_PHASE2_SYSTEM_PROMPT,
@@ -216,18 +225,36 @@ async def run_compliance_audit(
     report = extract_response_json(phase2_resp, ComplianceAuditReport)
     assert isinstance(report, ComplianceAuditReport)
 
-    # Grounding safeguard: enforce exact deterministic findings, citations, names, and warnings
+    # Grounding safeguard: enforce exact deterministic findings, citations, names, and warnings,
+    # while preserving validated semantic `crop_usage_sync` items from Phase 2.
+    valid_label_doc_ids = set(crop_evidence.get("valid_label_doc_ids", []))
+    crop_items: list[ComplianceChecklistItem] = []
+    for item in report.checklist_items:
+        if item.category != "crop_usage_sync":
+            continue
+        cite = item.current_label_citation
+        if cite is not None and cite.doc_id not in valid_label_doc_ids:
+            cite = None
+        crop_items.append(item.model_copy(update={"current_label_citation": cite, "supporting_citations": []}))
+
+    merged_items = _to_checklist_items(toolset.last_findings) + crop_items
+    merged_statuses = {f.action_status for f in toolset.last_findings} | {i.action_status for i in crop_items}
+    if "pending_moa_approval" in merged_statuses:
+        overall: OverallComplianceStatus = "pending_moa_approval"
+    elif "must_update" in merged_statuses:
+        overall = "action_required"
+    elif "verify_warning" in merged_statuses or not toolset.has_label or not toolset.has_moa:
+        overall = "needs_verification"
+    else:
+        overall = "compliant"
+
     return report.model_copy(
         update={
             "reg_no": canon_reg,
             "product_name_zh": toolset.moa_chinese_name or toolset.label_common_name or report.product_name_zh,
             "product_name_en": toolset.moa_english_name or report.product_name_en,
-            "overall_status": _derive_overall_status(
-                toolset.last_findings,
-                has_label=toolset.has_label,
-                has_moa=toolset.has_moa,
-            ),
-            "checklist_items": _to_checklist_items(toolset.last_findings),
+            "overall_status": overall,
+            "checklist_items": merged_items,
             "moa_snapshot_stale": toolset.moa_stale,
             "msds_doc_id_used": toolset.msds_doc_id_used,
             "audit_warnings": list(toolset.warnings),

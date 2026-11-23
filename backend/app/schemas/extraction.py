@@ -12,6 +12,20 @@ from app.schemas.grounded import GhsPictogramCode, GroundedField
 CertSubtype = Literal["loa", "moc", "free_sale", "loo", "other"]
 
 
+class CropUsageRow(BaseModel):
+    """One row of the allowed crop & usage table (使用方法 / 使用範圍) printed on a product label."""
+
+    crop_name: GroundedField[str] | None = Field(default=None, description="作物名稱 (e.g. 果樹, 柑桔類, 水稻).")
+    pest_name: GroundedField[str] | None = Field(default=None, description="病蟲害名稱 (e.g. 白粉病, 銹蜱類).")
+    dosage_per_ha: GroundedField[str] | None = Field(default=None, description="每公頃每次用藥量.")
+    dilution_ratio: GroundedField[str] | None = Field(default=None, description="稀釋倍數.")
+    application_timing: GroundedField[str] | None = Field(default=None, description="使用時期.")
+    application_count: GroundedField[str] | None = Field(default=None, description="施用次數.")
+    interval_days: GroundedField[str] | None = Field(default=None, description="施藥間隔 (日).")
+    phi_days: GroundedField[str] | None = Field(default=None, description="安全採收期 (日).")
+    notes: GroundedField[str] | None = Field(default=None, description="注意事項 / 備註 / 說明.")
+
+
 class ProductLabelExtraction(BaseModel):
     """Structured extraction for Traditional Chinese product & active-ingredient (原體) label images/PDFs."""
 
@@ -82,6 +96,10 @@ class ProductLabelExtraction(BaseModel):
     aphia_review_annotations: list[GroundedField[str]] = Field(
         default_factory=list,
         description="Formal modification instructions drawn, handwritten, or stamped by APHIA directly on the label.",
+    )
+    crop_usage_table: list[CropUsageRow] = Field(
+        default_factory=list,
+        description="Every row of the allowed crop & usage table (使用方法 / 使用範圍) printed on the label.",
     )
 
 

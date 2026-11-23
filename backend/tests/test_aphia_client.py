@@ -125,3 +125,33 @@ async def test_lookup_aphia_falls_back_to_stale_cache_on_upstream_error() -> Non
     res = await lookup_aphia_for_tokens(session, http, ["依普座"])
     assert res["stale"] is True
     assert len(res["carcinogen_matches"]) == 1
+
+
+def test_label_crop_usage_schema_and_evidence_bundle() -> None:
+    from app.db.models import MoaRegistry
+    from app.schemas.extraction import CropUsageRow, ProductLabelExtraction
+    from app.schemas.grounded import GroundedField
+    from app.services.tools import CopilotToolset
+
+    gf = lambda v: GroundedField[str](verbatim_text=v, value=v, page=1, box_2d=[10, 10, 50, 50])
+    label = ProductLabelExtraction(
+        reg_no=gf("農藥進00569"),
+        crop_usage_table=[
+            CropUsageRow(crop_name=gf("果樹"), pest_name=gf("白粉病"), dilution_ratio=gf("1000"))
+        ],
+    )
+    moa = MoaRegistry(
+        reg_no="農藥進00569",
+        permit_type="農藥進",
+        permit_number="00569",
+        raw_core_json={},
+        approved_usages_json=[{"作物名稱": "果樹", "病蟲害名稱": "白粉病", "稀釋倍數": "1200"}],
+    )
+    toolset = CopilotToolset(session=MagicMock(), http=MagicMock(), moa_api_base_url="https://example.com")
+    toolset._moa = moa
+    toolset._label = ("lbl_1", label)
+
+    evidence = toolset.build_crop_usage_evidence()
+    assert evidence["valid_label_doc_ids"] == ["lbl_1"]
+    assert len(evidence["label_crop_usages"]) == 1
+    assert len(evidence["moa_approved_usages"]) == 1
