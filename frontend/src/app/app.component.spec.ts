@@ -47,13 +47,33 @@ describe('AppComponent', () => {
     const aliasReq = httpMock.expectOne('/api/entity-aliases');
     aliasReq.flush([]);
 
-    component.onSelectCitation({
+    component.onSelectCitations([
+      {
+        doc_id: 'loa_multi',
+        page: 2,
+        box_2d: [10, 10, 50, 50],
+        verbatim_quote: 'Sulfur',
+        extra_boxes_2d: [],
+      },
+      {
+        doc_id: 'label_1',
+        page: 1,
+        box_2d: [20, 20, 60, 60],
+        verbatim_quote: 'Label Sulfur',
+        extra_boxes_2d: [],
+      },
+    ]);
+    expect(component.compareCitations().length).toBe(2);
+    expect(component.docLabelsById()['loa_multi']).toBe('loa.pdf (change_cert)');
+
+    component.onOpenFullCitation({
       doc_id: 'loa_multi',
       page: 2,
       box_2d: [10, 10, 50, 50],
       verbatim_quote: 'Sulfur',
       extra_boxes_2d: [],
     });
+    expect(component.compareCitations().length).toBe(0);
     expect(component.viewerTotalPages()).toBe(4);
     expect(component.viewerPage()).toBe(2);
   });
@@ -70,6 +90,38 @@ describe('AppComponent', () => {
     expect(document.documentElement.getAttribute('data-theme')).toBe(toggled);
 
     expect(() => fixture.destroy()).not.toThrow();
+  });
+
+  it('loads APHIA details after MOA lookup without blocking on APHIA error', () => {
+    fixture.detectChanges();
+    httpMock.expectOne('/api/documents?limit=50').flush([]);
+    httpMock.expectOne('/api/entity-aliases').flush([]);
+
+    component.loadBaselines();
+    httpMock.expectOne('/api/registry/%E8%BE%B2%E8%97%A5%E9%80%B200569').flush({
+      reg_no: '農藥進00569',
+      permit_type: '農藥進',
+      permit_number: '00569',
+      chinese_name: '嘉磷塞',
+      english_name: 'Glyphosate',
+      stale: false,
+      fetched_at: '2026-11-23T00:00:00Z',
+    });
+    httpMock
+      .expectOne(
+        '/api/documents?reg_no=%E8%BE%B2%E8%97%A5%E9%80%B200569&is_active_baseline=true&include_shared_certs=true&limit=50',
+      )
+      .flush([]);
+    httpMock
+      .expectOne('/api/registry/%E8%BE%B2%E8%97%A5%E9%80%B200569/aphia')
+      .flush('upstream error', { status: 503, statusText: 'Service Unavailable' });
+    httpMock
+      .expectOne('/api/copilot/audit/%E8%BE%B2%E8%97%A5%E9%80%B200569')
+      .flush(null, { status: 404, statusText: 'Not Found' });
+
+    expect(component.moaSnapshot()?.chinese_name).toBe('嘉磷塞');
+    expect(component.aphiaSnapshot()).toBeNull();
+    expect(component.baselinesLoading()).toBeFalse();
   });
 
   it('loadBaselines fetches MOA and active baseline docs and reveals audit trigger', () => {
@@ -114,6 +166,19 @@ describe('AppComponent', () => {
         uploaded_at: '2026-11-22T00:00:00Z',
       },
     ]);
+    httpMock
+      .expectOne('/api/registry/%E8%BE%B2%E8%97%A5%E9%80%B200569/aphia')
+      .flush({
+        reg_no: '農藥進00569',
+        chinese_name: '可濕性硫黃',
+        keywords: ['可濕性硫黃', 'SULFUR'],
+        carcinogen_matches: [],
+        assessment_matches: [],
+        latest_pre_notice: null,
+        evaluation_submitted_date: null,
+        stale: false,
+        fetched_at: '2026-11-23T00:00:00Z',
+      });
     expect(component.baselineDocs().length).toBe(1);
 
     httpMock

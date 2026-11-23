@@ -1,5 +1,60 @@
 <mat-card appearance="outlined" class="viewer-card" aria-label="文件座標檢視器">
-  <header class="viewer-toolbar">
+  @if (compareCitations().length > 0; as _hasCompare) {
+    <header class="viewer-toolbar">
+      <div class="viewer-title">
+        <strong>差異焦點並排檢視</strong>
+        <span class="page-indicator">{{ compareCitations().length }} 處重點區域</span>
+      </div>
+    </header>
+
+    <div class="focus-zones-grid">
+      @for (cite of compareCitations(); track cite.doc_id + ':' + cite.page + ':' + $index) {
+        <section class="focus-zone-card" [attr.aria-label]="getCitationDocLabel(cite) + ' 第 ' + cite.page + ' 頁重點'">
+          <header class="focus-zone-header">
+            <span class="focus-zone-title">{{ getCitationDocLabel(cite) }} · P{{ cite.page }}</span>
+            <button
+              type="button"
+              mat-button
+              class="focus-fullpage-btn"
+              (click)="openFullCitation.emit(cite)"
+            >
+              完整頁面
+            </button>
+          </header>
+          <div class="focus-zone-frame">
+            <svg
+              class="focus-crop-svg"
+              role="img"
+              [attr.aria-label]="getCitationDocLabel(cite) + ' 第 ' + cite.page + ' 頁裁切焦點'"
+              [attr.viewBox]="getCropViewBox(cite)"
+              preserveAspectRatio="xMidYMid meet"
+            >
+              <image
+                [attr.href]="getCitationImageUrl(cite)"
+                x="0"
+                y="0"
+                [attr.width]="getCitationDims(cite).w"
+                [attr.height]="getCitationDims(cite).h"
+                preserveAspectRatio="none"
+              />
+              @for (box of getCitationBoxes(cite); track $index) {
+                @let rect = scaleBoxRect(box, cite);
+                <rect
+                  class="bbox-rect"
+                  [attr.x]="rect.x"
+                  [attr.y]="rect.y"
+                  [attr.width]="rect.width"
+                  [attr.height]="rect.height"
+                />
+              }
+            </svg>
+          </div>
+          <p class="focus-zone-quote"><q>{{ cite.verbatim_quote }}</q></p>
+        </section>
+      }
+    </div>
+  } @else {
+    <header class="viewer-toolbar">
     <div class="viewer-title">
       <strong>{{ docLabel() || docId() || '尚未選取文件' }}</strong>
       @if (docId()) {
@@ -57,7 +112,7 @@
         <p>無法載入頁面影像（第 {{ pageNumber() }} 頁）。請確認後端服務與文件儲存狀態。</p>
       </div>
     } @else {
-      <div class="viewer-scroll-container">
+      <div #scrollContainer class="viewer-scroll-container">
         <div
           class="viewer-stage"
           [style.width.%]="zoom() * 100"
@@ -109,7 +164,8 @@
     }
   } @else {
     <div class="empty-viewer">
-      <p>點擊檢查項目的引用按鈕，或從基準文件/文件庫選取文件，即可於此檢視與放大定位。</p>
+      <p>點擊檢查項目的「Diff」按鈕，或從基準文件/文件庫選取文件，即可於此檢視與放大定位。</p>
     </div>
+  }
   }
 </mat-card>

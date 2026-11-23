@@ -308,3 +308,35 @@ class CopilotToolset:
             "finding_count": len(findings),
             "findings": [asdict(f) for f in findings],
         }
+
+    def build_crop_usage_evidence(self) -> dict[str, Any]:
+        """Return parsed label crop-usage rows + MOA approved_usages_json for Phase 2 comparison."""
+        label_targets = (
+            self._labels
+            if self._labels
+            else ([(self._label[0], "", self._label[1])] if self._label else [])
+        )
+        label_rows: list[dict[str, Any]] = []
+        valid_doc_ids: set[str] = set()
+        for l_id, vol_tag, l_model in label_targets:
+            if not l_id or l_model is None:
+                continue
+            valid_doc_ids.add(l_id)
+            for row in l_model.crop_usage_table:
+                label_rows.append(
+                    {
+                        "doc_id": l_id,
+                        "volume_tag": vol_tag,
+                        "row": row.model_dump(),
+                    }
+                )
+        moa_usages = (
+            self._moa.approved_usages_json
+            if self._moa and isinstance(self._moa.approved_usages_json, list)
+            else []
+        )
+        return {
+            "label_crop_usages": label_rows,
+            "moa_approved_usages": moa_usages,
+            "valid_label_doc_ids": sorted(valid_doc_ids),
+        }

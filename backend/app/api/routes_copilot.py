@@ -17,6 +17,7 @@ from app.config import Settings
 from app.db.models import AuditReportCache, Document, EntityAlias, MoaRegistry, _utc_now
 from app.db.session import get_db_session
 from app.schemas.report import ComplianceAuditReport
+from app.services.aphia_client import extract_ingredient_tokens, lookup_aphia_for_tokens
 from app.services.cascade_diff import validate_reg_no
 from app.services.copilot import run_compliance_audit
 from app.services.parser import GeminiParseError
@@ -157,6 +158,18 @@ async def audit_permit(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except (GeminiParseError, genai_errors.APIError) as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    try:
+        tokens = extract_ingredient_tokens(report.product_name_zh, report.product_name_en)
+        if tokens:
+            aphia = await lookup_aphia_for_tokens(session, http, tokens)
+            for hit in aphia.get("carcinogen_matches", [])[:3]:
+                msg = f"APHIA 可能致癌農藥提醒: {hit['title']}"
+                if msg not in report.audit_warnings:
+                    report.audit_warnings.append(msg)
+    except Exception:
+        # Best-effort APHIA enrichment must never stall or fail Copilot audits
+        pass
 
     cache_key = await _compute_audit_cache_key(session, canon_reg, confirmed_aliases)
     upsert_stmt = (

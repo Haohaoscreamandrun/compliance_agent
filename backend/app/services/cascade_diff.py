@@ -25,6 +25,7 @@ DiffCategory = Literal[
     "aphia_label_instruction",
     "official_letter_mandate",
     "common_name_mismatch",
+    "crop_usage_sync",
 ]
 ActionStatus = Literal[
     "must_update",

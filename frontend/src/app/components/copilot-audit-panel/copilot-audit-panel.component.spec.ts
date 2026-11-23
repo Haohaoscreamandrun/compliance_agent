@@ -47,6 +47,16 @@ describe('CopilotAuditPanelComponent', () => {
           current_label_citation: null,
           supporting_citations: [citation],
         },
+        {
+          field_name: '使用範圍：茶 / 炭疽病',
+          category: 'crop_usage_sync',
+          action_status: 'verify_warning',
+          current_label_value: '未登載',
+          recommended_new_value: '稀釋 1000 倍',
+          rationale: 'Allowed by MOA but omitted on label.',
+          current_label_citation: null,
+          supporting_citations: [],
+        },
       ],
       moa_snapshot_stale: true,
       msds_doc_id_used: null,
@@ -61,12 +71,17 @@ describe('CopilotAuditPanelComponent', () => {
     expect(fixture.nativeElement.querySelector('p.summary-en[lang="en"]')?.textContent).toContain(
       'English summary',
     );
+    expect(component.basicChecklistItems().length).toBe(1);
+    expect(component.cropUsageItems().length).toBe(1);
+    expect(fixture.nativeElement.textContent).toContain('基本資料比對 (1)');
+    expect(fixture.nativeElement.textContent).toContain('未登載使用範圍 (1)');
 
-    const emitted: CitationRef[] = [];
-    component.selectCitation.subscribe((c) => emitted.push(c));
-    const btn: HTMLButtonElement | null = fixture.nativeElement.querySelector('button.cite-support');
+    const emitted: CitationRef[][] = [];
+    component.selectCitations.subscribe((c) => emitted.push(c));
+    const btn: HTMLButtonElement | null = fixture.nativeElement.querySelector('button.cite-diff');
+    expect(btn?.textContent?.trim()).toBe('Diff');
     expect(btn?.getAttribute('aria-label')).toContain('製造廠名稱');
     btn?.click();
-    expect(emitted).toEqual([citation]);
+    expect(emitted).toEqual([[citation]]);
   });
 });

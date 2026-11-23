@@ -24,7 +24,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatToolbarModule } from '@angular/material/toolbar';
-import { catchError, of, Subscription, switchMap } from 'rxjs';
+import { catchError, forkJoin, of, Subscription, switchMap } from 'rxjs';
 
 import { BboxSvgViewerComponent } from './components/bbox-svg-viewer/bbox-svg-viewer.component';
 import { CopilotAuditPanelComponent } from './components/copilot-audit-panel/copilot-audit-panel.component';
@@ -37,6 +37,7 @@ import {
   UploadDialogData,
 } from './components/upload-dialog/upload-dialog.component';
 import {
+  AphiaLookupResponse,
   CitationRef,
   ComplianceAuditReport,
   DocType,
@@ -100,6 +101,10 @@ export class AppComponent implements OnInit {
   // Permit, MOA & Pulled Baselines state
   readonly regNo = signal('農藥進00569');
   readonly moaSnapshot = signal<RegistryLookupResponse | null>(null);
+  readonly aphiaSnapshot = signal<AphiaLookupResponse | null>(null);
+  readonly aphiaRefreshing = signal(false);
+  readonly evalDateInput = signal('');
+  readonly evalSaving = signal(false);
   readonly baselinesLoaded = signal(false);
   readonly baselineDocs = signal<DocumentSummary[]>([]);
   readonly baselinesLoading = signal(false);
@@ -127,6 +132,15 @@ export class AppComponent implements OnInit {
   readonly viewerTotalPages = signal(1);
   readonly viewerDocLabel = signal('');
   readonly activeCitation = signal<CitationRef | null>(null);
+  readonly compareCitations = signal<CitationRef[]>([]);
+
+  readonly docLabelsById = computed<Record<string, string>>(() => {
+    const labels: Record<string, string> = {};
+    for (const [id, d] of this.docsById()) {
+      labels[id] = `${d.filename} (${d.doc_type})`;
+    }
+    return labels;
+  });
 
   readonly docsById = computed(() => {
     const map = new Map<string, DocumentSummary>();
@@ -177,6 +191,7 @@ export class AppComponent implements OnInit {
     this.baselinesError.set(null);
     this.baselinesLoaded.set(true);
     this.moaSnapshot.set(null);
+    this.aphiaSnapshot.set(null);
     this.auditReport.set(null);
     this.auditError.set(null);
 
@@ -190,18 +205,25 @@ export class AppComponent implements OnInit {
           if (snap) {
             this.moaSnapshot.set(snap);
           }
-          return this.api.listDocuments({
-            reg_no: target,
-            is_active_baseline: true,
-            include_shared_certs: true,
-            limit: 50,
+          return forkJoin({
+            docs: this.api.listDocuments({
+              reg_no: target,
+              is_active_baseline: true,
+              include_shared_certs: true,
+              limit: 50,
+            }),
+            aphia: snap
+              ? this.api.lookupAphia(target).pipe(catchError(() => of(null)))
+              : of(null),
           });
         }),
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe({
-        next: (docs) => {
+        next: ({ docs, aphia }) => {
           this.baselineDocs.set(docs);
+          this.aphiaSnapshot.set(aphia);
+          this.evalDateInput.set(aphia?.evaluation_submitted_date ?? '');
           this.baselinesLoading.set(false);
           this.api
             .getCachedAuditReport(target)
@@ -248,8 +270,33 @@ export class AppComponent implements OnInit {
       });
   }
 
-  onSelectCitation(citation: CitationRef): void {
+  onSelectCitations(citations: CitationRef[]): void {
+    const byKey = new Map<string, CitationRef>();
+    for (const c of citations) {
+      const key = `${c.doc_id}:${c.page}`;
+      const existing = byKey.get(key);
+      if (existing) {
+        byKey.set(key, {
+          ...existing,
+          extra_boxes_2d: [
+            ...(existing.extra_boxes_2d ?? []),
+            c.box_2d,
+            ...(c.extra_boxes_2d ?? []),
+          ],
+          verbatim_quote: existing.verbatim_quote.includes(c.verbatim_quote)
+            ? existing.verbatim_quote
+            : `${existing.verbatim_quote} / ${c.verbatim_quote}`,
+        });
+      } else {
+        byKey.set(key, c);
+      }
+    }
+    this.compareCitations.set(Array.from(byKey.values()));
+  }
+
+  onOpenFullCitation(citation: CitationRef): void {
     const doc = this.docsById().get(citation.doc_id);
+    this.compareCitations.set([]);
     this.viewerDocId.set(citation.doc_id);
     this.viewerPage.set(citation.page);
     this.viewerTotalPages.set(doc?.page_count ?? Math.max(citation.page, 1));
@@ -258,6 +305,7 @@ export class AppComponent implements OnInit {
   }
 
   previewDocument(doc: DocumentSummary): void {
+    this.compareCitations.set([]);
     this.viewerDocId.set(doc.doc_id);
     this.viewerPage.set(1);
     this.viewerTotalPages.set(doc.page_count);
@@ -289,7 +337,7 @@ export class AppComponent implements OnInit {
       DocumentUploadResponse[] | null
     >(UploadDialogComponent, {
       data: { defaultRegNo: this.regNo() },
-      width: 'min(580px, 94vw)',
+      width: 'min(1160px, 94vw)',
       maxWidth: '94vw',
       panelClass: 'wide-upload-dialog',
     });
@@ -390,6 +438,52 @@ export class AppComponent implements OnInit {
     }
   }
 
+  refreshAphia(): void {
+    const target = this.regNo().trim();
+    if (!target || this.aphiaRefreshing()) return;
+    this.aphiaRefreshing.set(true);
+    this.api
+      .lookupAphia(target, true)
+      .pipe(
+        catchError(() => of(null)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((aphia) => {
+        if (aphia) {
+          this.aphiaSnapshot.set(aphia);
+          this.evalDateInput.set(aphia.evaluation_submitted_date ?? '');
+        }
+        this.aphiaRefreshing.set(false);
+      });
+  }
+
+  saveEvaluationDate(): void {
+    const target = this.regNo().trim();
+    const dateVal = this.evalDateInput().trim();
+    if (!target || !dateVal || this.evalSaving()) return;
+    this.evalSaving.set(true);
+    this.api
+      .saveAphiaEvaluation(target, dateVal)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (saved) => {
+          this.aphiaSnapshot.update((cur) =>
+            cur ? { ...cur, evaluation_submitted_date: saved.submitted_date } : cur,
+          );
+          this.evalSaving.set(false);
+          this.snackBar.open(`已儲存 ${saved.common_name} 評估送件日：${saved.submitted_date}`, '關閉', {
+            duration: 4000,
+          });
+        },
+        error: (err) => {
+          this.evalSaving.set(false);
+          this.snackBar.open(extractApiErrorMessage(err, '儲存評估送件日失敗'), '關閉', {
+            duration: 5000,
+          });
+        },
+      });
+  }
+
   toggleTheme(): void {
     const next = this.theme() === 'light' ? 'dark' : 'light';
     this.theme.set(next);
@@ -417,9 +511,11 @@ export class AppComponent implements OnInit {
       preset: contour,
       palette: '#5ec2d8',
       accent: '#1b6c80',
-      cursor: false,
+      cellSize: 15,
+      charset: ' ⠁⠃⠇⡇⣇⣧⣷⣿',
+      cursor: 'fluid',
+      opacity: 0.6,
       lazy: false,
-      speed: 0.6,
     });
   }
 

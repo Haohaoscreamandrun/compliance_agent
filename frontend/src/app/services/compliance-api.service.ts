@@ -3,11 +3,13 @@ import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 
 import {
+  AphiaLookupResponse,
   ComplianceAuditReport,
   DocType,
   DocumentSummary,
   DocumentUploadResponse,
   EntityAlias,
+  EvaluationSubmissionResponse,
   RegistryLookupResponse,
 } from '../models/compliance.models';
 
@@ -30,6 +32,25 @@ export class ComplianceApiService {
   lookupRegistry(regNo: string): Observable<RegistryLookupResponse> {
     return this.http.get<RegistryLookupResponse>(
       `${this.baseUrl}/registry/${encodeURIComponent(regNo.trim())}`,
+    );
+  }
+
+  lookupAphia(regNo: string, refresh = false): Observable<AphiaLookupResponse> {
+    const params = refresh ? new HttpParams().set('refresh', 'true') : undefined;
+    return this.http.get<AphiaLookupResponse>(
+      `${this.baseUrl}/registry/${encodeURIComponent(regNo.trim())}/aphia`,
+      { params },
+    );
+  }
+
+  saveAphiaEvaluation(
+    regNo: string,
+    submittedDate: string,
+    notes?: string,
+  ): Observable<EvaluationSubmissionResponse> {
+    return this.http.post<EvaluationSubmissionResponse>(
+      `${this.baseUrl}/registry/${encodeURIComponent(regNo.trim())}/aphia/evaluation`,
+      { submitted_date: submittedDate, notes: notes ?? null },
     );
   }
 

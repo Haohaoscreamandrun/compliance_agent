@@ -190,6 +190,113 @@
         </mat-card>
       }
 
+      @if (aphiaSnapshot(); as aphia) {
+        <mat-card appearance="outlined" class="aphia-card" aria-label="APHIA 公告與評估資訊">
+          <details class="aphia-details" [open]="aphia.carcinogen_matches.length > 0 || aphia.assessment_matches.length === 0">
+            <summary class="aphia-summary">
+              <span class="aphia-summary-left">
+                <strong>APHIA 評估與公告</strong>
+                @if (aphia.assessment_matches.length > 0) {
+                  <span class="aphia-badge is-ok">15 年評估已通過 ({{ aphia.assessment_matches.length }})</span>
+                } @else if (aphia.evaluation_submitted_date) {
+                  <span class="aphia-badge is-ok">已送件評估：{{ aphia.evaluation_submitted_date }}</span>
+                } @else {
+                  <span class="aphia-badge is-warn">尚無 15 年評估資料（需補評估報告/送件日）</span>
+                }
+                @if (aphia.carcinogen_matches.length > 0) {
+                  <span class="aphia-badge is-alert">可能致癌提醒 ({{ aphia.carcinogen_matches.length }})</span>
+                }
+                @if (aphia.latest_pre_notice) {
+                  <span class="aphia-badge">有預先通知公告</span>
+                }
+                @if (aphia.stale) {
+                  <span class="stale-badge">快取</span>
+                }
+              </span>
+            </summary>
+            <div class="aphia-body">
+              <div class="aphia-toolbar">
+                <button
+                  mat-stroked-button
+                  type="button"
+                  [disabled]="aphiaRefreshing()"
+                  (click)="refreshAphia()"
+                >
+                  {{ aphiaRefreshing() ? '更新中…' : '重新整理 APHIA（含致癌 PDF）' }}
+                </button>
+              </div>
+
+              @if (aphia.assessment_matches.length > 0) {
+                @for (item of aphia.assessment_matches; track item.source_key) {
+                  <div class="aphia-row">
+                    <span class="aphia-badge is-ok">農藥評估資料</span>
+                    <span>{{ item.title }}（已通過 15 年展延評估，可安全展延）</span>
+                    @if (item.published_date) {
+                      <span class="doc-meta">{{ item.published_date }}</span>
+                    }
+                    @if (item.detail_url) {
+                      <a [href]="item.detail_url" target="_blank" rel="noopener noreferrer">PDF</a>
+                    }
+                  </div>
+                }
+              } @else {
+                <div class="aphia-eval-form">
+                  <span class="aphia-badge is-warn">無 15 年評估資料</span>
+                  <span>
+                    查無此有效成分之農藥評估資料，請提供評估報告或記錄送件日期
+                    @if (aphia.evaluation_submitted_date) {
+                      （目前已記錄：<strong>{{ aphia.evaluation_submitted_date }}</strong>）
+                    }
+                  </span>
+                  <div class="aphia-date-controls">
+                    <label class="doc-meta" for="aphia-eval-date">送件日期</label>
+                    <input
+                      id="aphia-eval-date"
+                      type="date"
+                      class="aphia-date-input"
+                      [value]="evalDateInput()"
+                      (input)="evalDateInput.set($any($event.target).value)"
+                    />
+                    <button
+                      mat-stroked-button
+                      type="button"
+                      [disabled]="!evalDateInput() || evalSaving()"
+                      (click)="saveEvaluationDate()"
+                    >
+                      {{ evalSaving() ? '儲存中…' : '儲存送件日' }}
+                    </button>
+                  </div>
+                </div>
+              }
+
+              @for (item of aphia.carcinogen_matches; track item.source_key) {
+                <div class="aphia-row">
+                  <span class="aphia-badge is-alert">可能致癌農藥</span>
+                  <span>{{ item.title }}</span>
+                  @if (item.detail_url) {
+                    <a [href]="item.detail_url" target="_blank" rel="noopener noreferrer">PDF</a>
+                  }
+                </div>
+              }
+
+              @if (aphia.latest_pre_notice; as notice) {
+                <div class="aphia-row">
+                  <span class="aphia-badge">最新預先通知公告</span>
+                  @if (notice.published_date) {
+                    <span class="doc-meta">{{ notice.published_date }}</span>
+                  }
+                  @if (notice.detail_url) {
+                    <a [href]="notice.detail_url" target="_blank" rel="noopener noreferrer">{{ notice.title }}</a>
+                  } @else {
+                    <span>{{ notice.title }}</span>
+                  }
+                </div>
+              }
+            </div>
+          </details>
+        </mat-card>
+      }
+
       @if (baselinesLoaded()) {
         <mat-card appearance="outlined" class="baselines-card" aria-label="基準文件清單">
           <header class="baselines-header">
@@ -230,15 +337,19 @@
         </mat-card>
       }
 
-      <div class="split-grid">
+      <div class="split-grid" [class.has-multi-viewer]="compareCitations().length > 1">
         @if (auditLoading() || auditReport() || auditError()) {
-          <app-copilot-audit-panel
-            [report]="auditReport()"
-            [loading]="auditLoading()"
-            [errorMessage]="auditError()"
-            (selectCitation)="onSelectCitation($event)"
-            (forceRefresh)="runAudit(true)"
-          />
+          @defer {
+            <app-copilot-audit-panel
+              [report]="auditReport()"
+              [loading]="auditLoading()"
+              [errorMessage]="auditError()"
+              (selectCitations)="onSelectCitations($event)"
+              (forceRefresh)="runAudit(true)"
+            />
+          } @placeholder {
+            <mat-progress-bar mode="indeterminate" aria-label="載入審查面板中"></mat-progress-bar>
+          }
         }
         <app-bbox-svg-viewer
           [docId]="viewerDocId()"
@@ -246,7 +357,10 @@
           [totalPages]="viewerTotalPages()"
           [docLabel]="viewerDocLabel()"
           [citation]="activeCitation()"
+          [compareCitations]="compareCitations()"
+          [docLabelsById]="docLabelsById()"
           (pageChange)="viewerPage.set($event)"
+          (openFullCitation)="onOpenFullCitation($event)"
         />
       </div>
     </main>

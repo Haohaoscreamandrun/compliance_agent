@@ -7,7 +7,8 @@ export type DiffCategory =
   | 'moa_registry_sync'
   | 'aphia_label_instruction'
   | 'official_letter_mandate'
-  | 'common_name_mismatch';
+  | 'common_name_mismatch'
+  | 'crop_usage_sync';
 
 export type ActionStatus =
   | 'must_update'
@@ -96,4 +97,33 @@ export interface DocumentUploadResponse extends DocumentSummary {
   model_used: string;
   used_fallback: boolean;
   extracted_data: Record<string, unknown>;
+}
+
+export interface AphiaRecordItem {
+  source_kind: string;
+  source_key: string;
+  title: string;
+  common_name: string | null;
+  published_date: string | null;
+  detail_url: string | null;
+}
+
+export interface AphiaLookupResponse {
+  reg_no: string;
+  chinese_name: string | null;
+  keywords: string[];
+  carcinogen_matches: AphiaRecordItem[];
+  assessment_matches: AphiaRecordItem[];
+  latest_pre_notice: AphiaRecordItem | null;
+  evaluation_submitted_date: string | null;
+  stale: boolean;
+  fetched_at: string;
+}
+
+export interface EvaluationSubmissionResponse {
+  reg_no: string;
+  common_name: string;
+  submitted_date: string;
+  notes: string | null;
+  updated_at: string;
 }

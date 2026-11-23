@@ -24,6 +24,7 @@ Extract all structured fields from this product or active-ingredient (原體) la
 - For `formulation_type`, look for the printed **Chinese** formulation type FIRST (e.g. `水分散性粒劑`, `水懸劑`, `懸浮劑`, `乳劑`, `可濕性粉劑`, `粒劑`, `溶液`), and extract its exact printed Chinese text in `verbatim_text` (and canonical code or Chinese text in `value`); fall back to an English formulation code only if no Chinese formulation type is printed on the label. Do NOT extract trade-name suffixes such as `DF` in `克魔力®DF`.
 - Normalize `reg_no` in `value` to canonical format without 字/第/號 (e.g., '農藥製00001', '農藥進00001', '農藥原進00001', '農藥原製00195').
 - Visually classify EVERY GHS hazard diamond pictogram on the label into `GHS01`-`GHS09` with its individual tight `box_2d`.
+- Extract EVERY row of the label's `使用方法` / `使用範圍` (allowed crop & pest usage) table into `crop_usage_table[]` with verbatim `crop_name`, `pest_name`, `dosage_per_ha`, `dilution_ratio`, `application_timing`, `application_count`, `interval_days`, `phi_days`, and `notes` and tight `box_2d` coordinates.
 - IMPORTANT: Look carefully for handwritten, drawn, redline, or stamped instructions added by APHIA (防檢署) directly on the label. Capture every single APHIA modification instruction in `aphia_review_annotations`.
 
 {_COMMON_GROUNDING_RULES}""",

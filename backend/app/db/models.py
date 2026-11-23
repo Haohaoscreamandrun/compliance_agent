@@ -212,3 +212,50 @@ class AuditReportCache(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utc_now
     )
+
+
+class AphiaRecord(Base):
+    """Cached APHIA regulatory row (banned/restricted/carcinogen/assessment/announcement)."""
+
+    __tablename__ = "aphia_records"
+    __table_args__ = (
+        UniqueConstraint("source_kind", "source_key", name="uq_aphia_source"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    source_kind: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    source_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    common_name: Mapped[str | None] = mapped_column(Text, index=True)
+    published_date: Mapped[str | None] = mapped_column(String(32))
+    detail_url: Mapped[str | None] = mapped_column(Text)
+    raw_fields_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    fetched_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utc_now, onupdate=_utc_now
+    )
+
+
+class AphiaQueryCache(Base):
+    """6-hour query-level APHIA cache keyed by normalized ingredient tokens (prevents empty-match stampedes)."""
+
+    __tablename__ = "aphia_query_cache"
+
+    query_key: Mapped[str] = mapped_column(String(128), primary_key=True)
+    keywords_json: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    result_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    fetched_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utc_now, onupdate=_utc_now
+    )
+
+
+class ChemicalEvaluation(Base):
+    """User-submitted 15-year evaluation report delivery date keyed by chemical common name."""
+
+    __tablename__ = "chemical_evaluations"
+
+    common_name: Mapped[str] = mapped_column(String(256), primary_key=True)
+    submitted_date: Mapped[str] = mapped_column(String(32), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utc_now, onupdate=_utc_now
+    )

@@ -298,6 +298,12 @@
   align-items: start;
 }
 
+@media (min-width: 1100px) {
+  .split-grid.has-multi-viewer {
+    grid-template-columns: minmax(420px, 1fr) minmax(560px, 1.4fr);
+  }
+}
+
 @media (max-width: 768px) {
   .brand-row {
     inline-size: 100%;
@@ -338,4 +344,75 @@
   color: var(--status-warn-fg);
   font-size: 0.75rem;
   font-weight: 600;
+}
+
+.aphia-card {
+  padding: 0.65rem 1rem;
+}
+
+.aphia-summary {
+  cursor: pointer;
+  font-size: 0.875rem;
+  list-style-position: inside;
+}
+
+.aphia-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding-block-start: 0.6rem;
+}
+
+.aphia-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.84rem;
+}
+
+.aphia-badge {
+  padding: 0.1rem 0.45rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-raised);
+  font-size: 0.75rem;
+  font-weight: 600;
+
+  &.is-alert {
+    background: var(--status-danger-bg);
+    color: var(--status-danger-fg);
+    border-color: var(--status-danger-fg);
+  }
+
+  &.is-warn {
+    background: var(--status-warn-bg);
+    color: var(--status-warn-fg);
+    border-color: var(--status-warn-fg);
+  }
+
+  &.is-ok {
+    background: var(--status-ok-bg);
+    color: var(--status-ok-fg);
+    border-color: var(--status-ok-fg);
+  }
+}
+
+.aphia-eval-form,
+.aphia-date-controls,
+.aphia-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.84rem;
+}
+
+.aphia-date-input {
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
 }
