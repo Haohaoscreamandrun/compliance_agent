@@ -337,7 +337,7 @@ export class AppComponent implements OnInit {
       DocumentUploadResponse[] | null
     >(UploadDialogComponent, {
       data: { defaultRegNo: this.regNo() },
-      width: 'min(580px, 94vw)',
+      width: 'min(1160px, 94vw)',
       maxWidth: '94vw',
       panelClass: 'wide-upload-dialog',
     });

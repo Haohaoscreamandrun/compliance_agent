@@ -22,9 +22,8 @@
 }
 
 .entries-row {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
   align-items: stretch;
   gap: 0.75rem;
   inline-size: 100%;
@@ -32,7 +31,6 @@
 }
 
 .entry-group {
-  flex: 1 1 240px;
   min-inline-size: 0;
   box-sizing: border-box;
   display: flex;
@@ -73,6 +71,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
+  margin-block-start: auto;
   padding-block: 0.25rem;
 }
 
