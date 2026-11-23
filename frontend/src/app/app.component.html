@@ -337,14 +337,14 @@
         </mat-card>
       }
 
-      <div class="split-grid">
+      <div class="split-grid" [class.has-multi-viewer]="compareCitations().length > 1">
         @if (auditLoading() || auditReport() || auditError()) {
           @defer {
             <app-copilot-audit-panel
               [report]="auditReport()"
               [loading]="auditLoading()"
               [errorMessage]="auditError()"
-              (selectCitation)="onSelectCitation($event)"
+              (selectCitations)="onSelectCitations($event)"
               (forceRefresh)="runAudit(true)"
             />
           } @placeholder {
@@ -357,7 +357,10 @@
           [totalPages]="viewerTotalPages()"
           [docLabel]="viewerDocLabel()"
           [citation]="activeCitation()"
+          [compareCitations]="compareCitations()"
+          [docLabelsById]="docLabelsById()"
           (pageChange)="viewerPage.set($event)"
+          (openFullCitation)="onOpenFullCitation($event)"
         />
       </div>
     </main>

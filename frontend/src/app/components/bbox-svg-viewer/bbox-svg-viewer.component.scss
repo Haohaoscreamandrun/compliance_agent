@@ -111,6 +111,71 @@
   z-index: 4;
 }
 
+.focus-zones-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  align-items: stretch;
+
+  &:has(> :only-child) {
+    grid-template-columns: 1fr;
+  }
+
+  @media (max-width: 600px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.focus-zone-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.65rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  min-width: 0;
+}
+
+.focus-zone-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.focus-zone-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.focus-fullpage-btn {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+}
+
+.focus-zone-frame {
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: #fff;
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+}
+
+.focus-crop-svg {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+.focus-zone-quote {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
 .empty-viewer {
   display: grid;
   place-items: center;

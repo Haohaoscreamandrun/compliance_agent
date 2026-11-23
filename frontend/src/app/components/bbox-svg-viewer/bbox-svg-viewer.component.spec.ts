@@ -79,4 +79,36 @@ describe('BboxSvgViewerComponent', () => {
     component.toggleMagnifier();
     expect(component.magnifierActive()).toBeFalse();
   });
+
+  it('renders cropped focus zones side-by-side when compareCitations is set', () => {
+    fixture.componentRef.setInput('docLabelsById', {
+      doc_label: 'label.pdf (label)',
+      doc_loa: 'loa.pdf (change_cert)',
+    });
+    fixture.componentRef.setInput('compareCitations', [
+      {
+        doc_id: 'doc_label',
+        page: 1,
+        box_2d: [200, 100, 300, 500],
+        verbatim_quote: 'Old Factory',
+        extra_boxes_2d: [],
+      },
+      {
+        doc_id: 'doc_loa',
+        page: 2,
+        box_2d: [400, 200, 500, 700],
+        verbatim_quote: 'New Factory',
+        extra_boxes_2d: [],
+      },
+    ]);
+    fixture.detectChanges();
+
+    const cards = fixture.nativeElement.querySelectorAll('.focus-zone-card');
+    expect(cards.length).toBe(2);
+    expect(cards[0].textContent).toContain('label.pdf (label) · P1');
+    expect(cards[1].textContent).toContain('loa.pdf (change_cert) · P2');
+    const svgs = fixture.nativeElement.querySelectorAll('svg.focus-crop-svg');
+    expect(svgs.length).toBe(2);
+    expect(svgs[0].getAttribute('viewBox')).not.toBe('0 0 1132 1600');
+  });
 });

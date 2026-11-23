@@ -132,6 +132,15 @@ export class AppComponent implements OnInit {
   readonly viewerTotalPages = signal(1);
   readonly viewerDocLabel = signal('');
   readonly activeCitation = signal<CitationRef | null>(null);
+  readonly compareCitations = signal<CitationRef[]>([]);
+
+  readonly docLabelsById = computed<Record<string, string>>(() => {
+    const labels: Record<string, string> = {};
+    for (const [id, d] of this.docsById()) {
+      labels[id] = `${d.filename} (${d.doc_type})`;
+    }
+    return labels;
+  });
 
   readonly docsById = computed(() => {
     const map = new Map<string, DocumentSummary>();
@@ -261,8 +270,33 @@ export class AppComponent implements OnInit {
       });
   }
 
-  onSelectCitation(citation: CitationRef): void {
+  onSelectCitations(citations: CitationRef[]): void {
+    const byKey = new Map<string, CitationRef>();
+    for (const c of citations) {
+      const key = `${c.doc_id}:${c.page}`;
+      const existing = byKey.get(key);
+      if (existing) {
+        byKey.set(key, {
+          ...existing,
+          extra_boxes_2d: [
+            ...(existing.extra_boxes_2d ?? []),
+            c.box_2d,
+            ...(c.extra_boxes_2d ?? []),
+          ],
+          verbatim_quote: existing.verbatim_quote.includes(c.verbatim_quote)
+            ? existing.verbatim_quote
+            : `${existing.verbatim_quote} / ${c.verbatim_quote}`,
+        });
+      } else {
+        byKey.set(key, c);
+      }
+    }
+    this.compareCitations.set(Array.from(byKey.values()));
+  }
+
+  onOpenFullCitation(citation: CitationRef): void {
     const doc = this.docsById().get(citation.doc_id);
+    this.compareCitations.set([]);
     this.viewerDocId.set(citation.doc_id);
     this.viewerPage.set(citation.page);
     this.viewerTotalPages.set(doc?.page_count ?? Math.max(citation.page, 1));
@@ -271,6 +305,7 @@ export class AppComponent implements OnInit {
   }
 
   previewDocument(doc: DocumentSummary): void {
+    this.compareCitations.set([]);
     this.viewerDocId.set(doc.doc_id);
     this.viewerPage.set(1);
     this.viewerTotalPages.set(doc.page_count);

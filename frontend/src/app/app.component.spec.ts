@@ -47,13 +47,33 @@ describe('AppComponent', () => {
     const aliasReq = httpMock.expectOne('/api/entity-aliases');
     aliasReq.flush([]);
 
-    component.onSelectCitation({
+    component.onSelectCitations([
+      {
+        doc_id: 'loa_multi',
+        page: 2,
+        box_2d: [10, 10, 50, 50],
+        verbatim_quote: 'Sulfur',
+        extra_boxes_2d: [],
+      },
+      {
+        doc_id: 'label_1',
+        page: 1,
+        box_2d: [20, 20, 60, 60],
+        verbatim_quote: 'Label Sulfur',
+        extra_boxes_2d: [],
+      },
+    ]);
+    expect(component.compareCitations().length).toBe(2);
+    expect(component.docLabelsById()['loa_multi']).toBe('loa.pdf (change_cert)');
+
+    component.onOpenFullCitation({
       doc_id: 'loa_multi',
       page: 2,
       box_2d: [10, 10, 50, 50],
       verbatim_quote: 'Sulfur',
       extra_boxes_2d: [],
     });
+    expect(component.compareCitations().length).toBe(0);
     expect(component.viewerTotalPages()).toBe(4);
     expect(component.viewerPage()).toBe(2);
   });

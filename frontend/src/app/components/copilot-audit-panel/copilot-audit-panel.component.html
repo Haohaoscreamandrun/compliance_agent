@@ -129,32 +129,19 @@
             <ng-container matColumnDef="citations">
               <th mat-header-cell *matHeaderCellDef scope="col">座標引用</th>
               <td mat-cell *matCellDef="let item" class="citations-cell">
-                <div class="citations-list">
-                  @if (item.current_label_citation; as lc) {
+                @if (collectCitations(item); as cites) {
+                  @if (cites.length > 0) {
                     <button
                       type="button"
                       mat-stroked-button
-                      class="cite-btn cite-label"
-                      [attr.aria-label]="'檢視「' + item.field_name + '」標籤第 ' + lc.page + ' 頁引用'"
-                      [title]="lc.doc_id + ' P' + lc.page"
-                      (click)="selectCitation.emit(lc)"
+                      class="cite-btn cite-diff"
+                      [attr.aria-label]="'檢視「' + item.field_name + '」差異引用 (' + cites.length + ' 處)'"
+                      (click)="selectCitations.emit(cites)"
                     >
-                      標籤 P{{ lc.page }}
+                      Diff
                     </button>
                   }
-                  @for (sc of item.supporting_citations; track sc.doc_id + ':' + sc.page + ':' + $index) {
-                    <button
-                      type="button"
-                      mat-stroked-button
-                      class="cite-btn cite-support"
-                      [attr.aria-label]="'檢視「' + item.field_name + '」佐證文件 ' + sc.doc_id + ' 第 ' + sc.page + ' 頁引用'"
-                      [title]="sc.doc_id + ' P' + sc.page"
-                      (click)="selectCitation.emit(sc)"
-                    >
-                      佐證 P{{ sc.page }}
-                    </button>
-                  }
-                </div>
+                }
               </td>
             </ng-container>
 

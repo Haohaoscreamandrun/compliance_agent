@@ -11,6 +11,7 @@ import {
   ActionStatus,
   CitationRef,
   ComplianceAuditReport,
+  ComplianceChecklistItem,
   OverallComplianceStatus,
 } from '../../models/compliance.models';
 
@@ -42,8 +43,19 @@ export class CopilotAuditPanelComponent {
     (this.report()?.checklist_items ?? []).filter((item) => item.category === 'crop_usage_sync'),
   );
 
-  readonly selectCitation = output<CitationRef>();
+  readonly selectCitations = output<CitationRef[]>();
   readonly forceRefresh = output<void>();
+
+  collectCitations(item: ComplianceChecklistItem): CitationRef[] {
+    const list: CitationRef[] = [];
+    if (item.current_label_citation) {
+      list.push(item.current_label_citation);
+    }
+    if (item.supporting_citations?.length) {
+      list.push(...item.supporting_citations);
+    }
+    return list;
+  }
 
   statusLabel(status: ActionStatus): string {
     switch (status) {

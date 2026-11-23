@@ -76,11 +76,12 @@ describe('CopilotAuditPanelComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('基本資料比對 (1)');
     expect(fixture.nativeElement.textContent).toContain('未登載使用範圍 (1)');
 
-    const emitted: CitationRef[] = [];
-    component.selectCitation.subscribe((c) => emitted.push(c));
-    const btn: HTMLButtonElement | null = fixture.nativeElement.querySelector('button.cite-support');
+    const emitted: CitationRef[][] = [];
+    component.selectCitations.subscribe((c) => emitted.push(c));
+    const btn: HTMLButtonElement | null = fixture.nativeElement.querySelector('button.cite-diff');
+    expect(btn?.textContent?.trim()).toBe('Diff');
     expect(btn?.getAttribute('aria-label')).toContain('製造廠名稱');
     btn?.click();
-    expect(emitted).toEqual([citation]);
+    expect(emitted).toEqual([[citation]]);
   });
 });
