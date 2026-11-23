@@ -443,9 +443,11 @@ export class AppComponent implements OnInit {
       preset: contour,
       palette: '#5ec2d8',
       accent: '#1b6c80',
-      cursor: false,
+      cellSize: 15,
+      charset: ' ⠁⠃⠇⡇⣇⣧⣷⣿',
+      cursor: 'fluid',
+      opacity: 0.6,
       lazy: false,
-      speed: 0.6,
     });
   }
 
