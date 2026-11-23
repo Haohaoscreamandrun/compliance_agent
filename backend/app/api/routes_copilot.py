@@ -163,8 +163,8 @@ async def audit_permit(
         tokens = extract_ingredient_tokens(report.product_name_zh, report.product_name_en)
         if tokens:
             aphia = await lookup_aphia_for_tokens(session, http, tokens)
-            for hit in aphia.get("forbid_matches", [])[:3]:
-                msg = f"APHIA 禁/限用或致癌風險提醒 ({hit['source_kind']}): {hit['title']}"
+            for hit in aphia.get("carcinogen_matches", [])[:3]:
+                msg = f"APHIA 可能致癌農藥提醒: {hit['title']}"
                 if msg not in report.audit_warnings:
                     report.audit_warnings.append(msg)
     except Exception:

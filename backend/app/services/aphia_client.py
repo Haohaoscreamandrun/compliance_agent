@@ -1,9 +1,10 @@
-# cSpell:words httpx asyncpg sqlalchemy Opendata Forbid
+# cSpell:words httpx asyncpg sqlalchemy Opendata pymupdf
 """On-call + PostgreSQL-cached client for Taiwan APHIA (pesticide.aphia.gov.tw).
 
-Queries official announcements (農藥公告), banned/restricted/deleted/carcinogen lists
-(Forbid1List..3List, OpendataList?code=3), and ACRI/toxicology risk assessments
-(OpendataList?code=6,8), using stdlib HTMLParser and strict origin/redirect guards.
+Queries:
+  1. OpendataList?code=2 (農藥評估資料 — 15-year post-registration evaluation)
+  2. OpendataList?code=3 -> PDF (可能致癌農藥限制登記及評估狀態), parsed with PyMuPDF on refresh/sync
+  3. NewsList?type=new (農藥公告) filtered by Chinese common name & '預先通知公告'
 """
 
 from __future__ import annotations
@@ -15,9 +16,10 @@ import re
 from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
 from typing import Any
-from urllib.parse import quote, urljoin, urlsplit
+from urllib.parse import quote, urljoin, urlsplit, urlunsplit
 
 import httpx
+import pymupdf
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,7 +29,7 @@ from app.db.models import AphiaQueryCache, AphiaRecord
 log = logging.getLogger(__name__)
 
 APHIA_ORIGIN = "https://pesticide.aphia.gov.tw"
-APHIA_TIMEOUT = httpx.Timeout(5.0)
+APHIA_TIMEOUT = httpx.Timeout(8.0)
 CACHE_TTL = timedelta(hours=6)
 
 _FORMULATION_RE = re.compile(
@@ -36,20 +38,11 @@ _FORMULATION_RE = re.compile(
 )
 _SPLIT_RE = re.compile(r"[+＋・·/、與;()（）]+|,\s+")
 _LATIN_TOKEN_RE = re.compile(r"^[A-Za-z0-9.,_-]+$")
-
-# (endpoint_path, extra_params, source_kind)
-_TABLE_ENDPOINTS: tuple[tuple[str, dict[str, str], str], ...] = (
-    ("/information/Data/Forbid1List/", {"pagesize": "50", "newquery": "true"}, "forbid_banned"),
-    ("/information/Data/Forbid2List/", {"pagesize": "50", "newquery": "true"}, "forbid_restricted"),
-    ("/information/Data/Forbid3List/", {"pagesize": "50", "newquery": "true"}, "forbid_deleted"),
-    ("/information/Data/OpendataList/", {"code": "3", "newquery": "true"}, "carcinogen"),
-    ("/information/Data/OpendataList/", {"code": "6", "newquery": "true"}, "assessment"),
-    ("/information/Data/OpendataList/", {"code": "8", "newquery": "true"}, "assessment"),
-)
+_CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 
 
 def validate_aphia_url(raw_href: str | None) -> str | None:
-    """Resolve relative links against APHIA_ORIGIN and reject any non-APHIA/unsafe URL."""
+    """Resolve relative links against APHIA_ORIGIN, encode non-ASCII paths, and reject non-APHIA URLs."""
     if not raw_href or not isinstance(raw_href, str):
         return None
     cleaned = raw_href.strip()
@@ -68,7 +61,8 @@ def validate_aphia_url(raw_href: str | None) -> str | None:
         or (parsed.port or 443) != 443
     ):
         return None
-    return resolved
+    safe_path = quote(parsed.path, safe="/%")
+    return urlunsplit((parsed.scheme, parsed.netloc, safe_path, parsed.query, ""))
 
 
 def extract_ingredient_tokens(*names: str | None) -> list[str]:
@@ -91,7 +85,7 @@ def extract_ingredient_tokens(*names: str | None) -> list[str]:
 
 
 def _matches_token(text: str, token: str) -> bool:
-    """Boundary-aware match preventing '2,4-D' from matching '2,4-DB' or noisy 1-char hits."""
+    """Boundary-aware match preventing '2,4-D' from matching '2,4-DB'."""
     if not text or not token or len(token) < 2:
         return False
     if _LATIN_TOKEN_RE.match(token):
@@ -209,8 +203,8 @@ class _NewsListParser(HTMLParser):
             self._title_buf.append(data)
 
 
-def parse_table_records(html_text: str, source_kind: str) -> list[dict[str, Any]]:
-    """Parse APHIA table HTML fragment into normalized record dicts."""
+def parse_assessment_records(html_text: str) -> list[dict[str, Any]]:
+    """Parse APHIA OpendataList?code=2 (農藥評估資料) table HTML into normalized dicts."""
     parser = _TableParser()
     parser.feed(html_text)
     records: list[dict[str, Any]] = []
@@ -219,23 +213,18 @@ def parse_table_records(html_text: str, source_kind: str) -> list[dict[str, Any]
         values = [v for v in fields.values() if v]
         if not values:
             continue
-        common_name = next(
-            (v for k, v in fields.items() if any(h in k for h in ("普通名稱", "農藥名稱", "成分", "藥劑"))),
-            values[0],
-        )
-        title = " — ".join(values[:3])
-        pub_date = next(
-            (v for k, v in fields.items() if any(h in k for h in ("公告日期", "日期", "生效日", "年度"))),
-            None,
+        title = fields.get("檔案名稱") or values[0]
+        pub_date = fields.get("發佈日期") or next(
+            (v for v in values if re.match(r"^\d{4}-\d{2}-\d{2}$", v)), None
         )
         detail_url = validate_aphia_url(row.get("href"))
-        key_src = f"{source_kind}|{common_name}|{title}"
+        key_src = f"assessment|{title}"
         records.append(
             {
-                "source_kind": source_kind,
+                "source_kind": "assessment",
                 "source_key": hashlib.sha256(key_src.encode("utf-8")).hexdigest()[:32],
                 "title": title,
-                "common_name": common_name,
+                "common_name": title,
                 "published_date": pub_date[:32] if pub_date else None,
                 "detail_url": detail_url,
                 "raw_fields_json": fields,
@@ -244,13 +233,64 @@ def parse_table_records(html_text: str, source_kind: str) -> list[dict[str, Any]
     return records
 
 
-def parse_news_records(html_text: str) -> list[dict[str, Any]]:
-    """Parse APHIA NewsList HTML fragment into normalized announcement dicts."""
+def parse_carcinogen_pdf(pdf_bytes: bytes, pdf_url: str | None) -> list[dict[str, Any]]:
+    """Parse APHIA 可能致癌農藥狀態 PDF tables using PyMuPDF."""
+    records: list[dict[str, Any]] = []
+    seen_keys: set[str] = set()
+    with pymupdf.open(stream=pdf_bytes, filetype="pdf") as doc:
+        for page in doc:
+            tables = page.find_tables()
+            for table in tables.tables:
+                for raw_row in table.extract():
+                    cells = [
+                        re.sub(r"\s+", " ", c).strip() if isinstance(c, str) else ""
+                        for c in raw_row
+                    ]
+                    if len(cells) < 3:
+                        continue
+                    grade, zh_name, en_name = cells[0], cells[1], cells[2]
+                    if grade in ("等級", "") and zh_name in ("藥劑中文名", ""):
+                        continue
+                    if grade not in ("B", "C") and not zh_name and not en_name:
+                        continue
+                    status_text = cells[5] if len(cells) > 5 else (cells[4] if len(cells) > 4 else "")
+                    eval_text = cells[4] if len(cells) > 4 else ""
+                    title = f"{zh_name} ({en_name}) [{grade}級] — {status_text or eval_text}".strip(" —")
+                    key_src = f"carcinogen|{grade}|{zh_name}|{en_name}"
+                    skey = hashlib.sha256(key_src.encode("utf-8")).hexdigest()[:32]
+                    if skey in seen_keys:
+                        continue
+                    seen_keys.add(skey)
+                    records.append(
+                        {
+                            "source_kind": "carcinogen",
+                            "source_key": skey,
+                            "title": title,
+                            "common_name": f"{zh_name} {en_name}".strip(),
+                            "published_date": None,
+                            "detail_url": pdf_url,
+                            "raw_fields_json": {
+                                "grade": grade,
+                                "zh_name": zh_name,
+                                "en_name": en_name,
+                                "us_epa": cells[3] if len(cells) > 3 else "",
+                                "evaluation": eval_text,
+                                "status": status_text,
+                            },
+                        }
+                    )
+    return records
+
+
+def parse_pre_notice_records(html_text: str) -> list[dict[str, Any]]:
+    """Parse APHIA NewsList HTML and keep only '預先通知公告' announcements."""
     parser = _NewsListParser()
     parser.feed(html_text)
     records: list[dict[str, Any]] = []
     for item in parser.items:
         title = str(item["title"])
+        if "預先通知公告" not in title:
+            continue
         detail_url = validate_aphia_url(item.get("href"))
         source_key = (
             detail_url.rsplit("/", 1)[-1][:64]
@@ -268,7 +308,16 @@ def parse_news_records(html_text: str) -> list[dict[str, Any]]:
                 "raw_fields_json": {"title": title, "published_date": item.get("published_date")},
             }
         )
+    records.sort(key=lambda r: r.get("published_date") or "", reverse=True)
     return records
+
+
+def _extract_first_pdf_url(html_text: str) -> str | None:
+    for match in re.findall(r'href=["\']([^"\']+\.pdf)["\']', html_text, re.IGNORECASE):
+        valid = validate_aphia_url(match)
+        if valid:
+            return valid
+    return None
 
 
 def _build_query_key(tokens: list[str]) -> str:
@@ -276,33 +325,7 @@ def _build_query_key(tokens: list[str]) -> str:
     return hashlib.sha256(joined.encode("utf-8")).hexdigest()[:64]
 
 
-def _categorize_records(records: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
-    forbid_matches: list[dict[str, Any]] = []
-    assessment_matches: list[dict[str, Any]] = []
-    announcements: list[dict[str, Any]] = []
-    seen: set[tuple[str, str]] = set()
-    for rec in records:
-        key = (rec["source_kind"], rec["source_key"])
-        if key in seen:
-            continue
-        seen.add(key)
-        kind = rec["source_kind"]
-        if kind in ("forbid_banned", "forbid_restricted", "forbid_deleted", "carcinogen"):
-            forbid_matches.append(rec)
-        elif kind == "assessment":
-            assessment_matches.append(rec)
-        else:
-            announcements.append(rec)
-    return {
-        "forbid_matches": forbid_matches,
-        "assessment_matches": assessment_matches,
-        "announcements": announcements,
-    }
-
-
-async def _fetch_html(http: httpx.AsyncClient, path: str, params: dict[str, str]) -> str:
-    query = "&".join(f"{quote(k)}={quote(v)}" for k, v in params.items())
-    url = f"{APHIA_ORIGIN}{path}?{query}"
+async def _fetch_text(http: httpx.AsyncClient, url: str) -> str:
     resp = await http.get(
         url,
         headers={"User-Agent": "ComplianceAgent/1.0"},
@@ -311,6 +334,17 @@ async def _fetch_html(http: httpx.AsyncClient, path: str, params: dict[str, str]
     )
     resp.raise_for_status()
     return resp.text
+
+
+async def _fetch_bytes(http: httpx.AsyncClient, url: str) -> bytes:
+    resp = await http.get(
+        url,
+        headers={"User-Agent": "ComplianceAgent/1.0"},
+        follow_redirects=False,
+        timeout=APHIA_TIMEOUT,
+    )
+    resp.raise_for_status()
+    return resp.content
 
 
 async def _upsert_records(session: AsyncSession, records: list[dict[str, Any]]) -> None:
@@ -333,6 +367,21 @@ async def _upsert_records(session: AsyncSession, records: list[dict[str, Any]]) 
         await session.execute(stmt)
 
 
+async def _refresh_carcinogen_records(
+    session: AsyncSession, http: httpx.AsyncClient
+) -> list[dict[str, Any]]:
+    html3 = await _fetch_text(
+        http, f"{APHIA_ORIGIN}/information/Data/OpendataList/?code=3&keyword=&newquery=true"
+    )
+    pdf_url = _extract_first_pdf_url(html3)
+    if not pdf_url:
+        return []
+    pdf_bytes = await _fetch_bytes(http, pdf_url)
+    records = parse_carcinogen_pdf(pdf_bytes, pdf_url)
+    await _upsert_records(session, records)
+    return records
+
+
 async def lookup_aphia_for_tokens(
     session: AsyncSession,
     http: httpx.AsyncClient,
@@ -340,14 +389,14 @@ async def lookup_aphia_for_tokens(
     *,
     force_refresh: bool = False,
 ) -> dict[str, Any]:
-    """Query APHIA announcements, forbid lists & assessments with 6h DB cache + stale fallback."""
+    """Query 農藥評估資料 (code=2), 可能致癌 PDF (code=3), and latest 預先通知公告."""
     now = datetime.now(timezone.utc)
     if not tokens:
         return {
             "keywords": [],
-            "forbid_matches": [],
+            "carcinogen_matches": [],
             "assessment_matches": [],
-            "announcements": [],
+            "latest_pre_notice": None,
             "stale": False,
             "fetched_at": now,
         }
@@ -365,74 +414,140 @@ async def lookup_aphia_for_tokens(
         data = cached_row.result_json
         return {
             "keywords": tokens,
-            "forbid_matches": data.get("forbid_matches", []),
+            "carcinogen_matches": data.get("carcinogen_matches", []),
             "assessment_matches": data.get("assessment_matches", []),
-            "announcements": data.get("announcements", []),
+            "latest_pre_notice": data.get("latest_pre_notice"),
             "stale": False,
             "fetched_at": cached_row.fetched_at,
         }
 
-    # Fetch each table/news endpoint per token concurrently with 5s timeout
-    tasks: list[Any] = []
-    meta: list[tuple[str, str]] = []
-    for tok in tokens[:3]:
-        for path, extra, kind in _TABLE_ENDPOINTS:
-            params = {**extra, "keyword": tok}
-            tasks.append(_fetch_html(http, path, params))
-            meta.append((kind, tok))
-        tasks.append(
-            _fetch_html(http, "/information/Data/NewsList/", {"type": "new", "keyword": tok, "newquery": "true"})
-        )
-        meta.append(("announcement", tok))
+    chinese_tokens = [t for t in tokens if _CJK_RE.search(t)]
 
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-    matched: list[dict[str, Any]] = []
+    # 1) Carcinogen PDF: parse only when force_refresh=True or aphia_records has no carcinogen rows
+    existing_carcinogens = (
+        await session.execute(select(AphiaRecord).where(AphiaRecord.source_kind == "carcinogen"))
+    ).scalars().all()
+
+    carcinogen_pool: list[dict[str, Any]] = [
+        {
+            "source_kind": r.source_kind,
+            "source_key": r.source_key,
+            "title": r.title,
+            "common_name": r.common_name,
+            "published_date": r.published_date,
+            "detail_url": r.detail_url,
+            "raw_fields_json": r.raw_fields_json,
+        }
+        for r in existing_carcinogens
+    ]
+
+    async def _maybe_refresh_carcinogen() -> list[dict[str, Any]] | None:
+        if force_refresh or not carcinogen_pool:
+            return await _refresh_carcinogen_records(session, http)
+        return None
+
+    # 2) Assessment (code=2) + 3) Pre-notice announcements (NewsList?type=new for Chinese tokens)
+    fetch_tasks: list[Any] = [_maybe_refresh_carcinogen()]
+    meta: list[tuple[str, str]] = [("carcinogen_refresh", "")]
+    for tok in tokens[:3]:
+        fetch_tasks.append(
+            _fetch_text(
+                http,
+                f"{APHIA_ORIGIN}/information/Data/OpendataList/?code=2&keyword={quote(tok)}&newquery=true",
+            )
+        )
+        meta.append(("assessment", tok))
+    for zh_tok in chinese_tokens[:2]:
+        fetch_tasks.append(
+            _fetch_text(
+                http,
+                f"{APHIA_ORIGIN}/information/Data/NewsList/?type=new&keyword={quote(zh_tok)}&newquery=true",
+            )
+        )
+        meta.append(("announcement", zh_tok))
+
+    results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
+    assessment_matches: list[dict[str, Any]] = []
+    pre_notices: list[dict[str, Any]] = []
     any_succeeded = False
 
     for (kind, tok), res in zip(meta, results):
         if isinstance(res, Exception):
             log.warning("APHIA fetch failed (%s, %s): %s", kind, tok, res)
             continue
+        if kind == "carcinogen_refresh":
+            if isinstance(res, list):
+                carcinogen_pool = res
+                any_succeeded = True
+            continue
         any_succeeded = True
-        parsed = parse_news_records(res) if kind == "announcement" else parse_table_records(res, kind)
-        for rec in parsed:
-            haystack = f"{rec.get('common_name') or ''} {rec.get('title') or ''}"
-            if _matches_token(haystack, tok):
-                matched.append(rec)
+        if kind == "assessment" and isinstance(res, str):
+            for rec in parse_assessment_records(res):
+                if _matches_token(rec["title"], tok):
+                    assessment_matches.append(rec)
+        elif kind == "announcement" and isinstance(res, str):
+            for rec in parse_pre_notice_records(res):
+                if _matches_token(rec["title"], tok):
+                    pre_notices.append(rec)
 
-    if not any_succeeded:
+    if not any_succeeded and not carcinogen_pool:
         if cached_row is not None:
             data = cached_row.result_json
             return {
                 "keywords": tokens,
-                "forbid_matches": data.get("forbid_matches", []),
+                "carcinogen_matches": data.get("carcinogen_matches", []),
                 "assessment_matches": data.get("assessment_matches", []),
-                "announcements": data.get("announcements", []),
+                "latest_pre_notice": data.get("latest_pre_notice"),
                 "stale": True,
                 "fetched_at": cached_row.fetched_at,
             }
         return {
             "keywords": tokens,
-            "forbid_matches": [],
+            "carcinogen_matches": [],
             "assessment_matches": [],
-            "announcements": [],
+            "latest_pre_notice": None,
             "stale": True,
             "fetched_at": now,
         }
 
-    categorized = _categorize_records(matched)
-    await _upsert_records(session, matched)
+    carcinogen_matches: list[dict[str, Any]] = []
+    seen_carc: set[str] = set()
+    for rec in carcinogen_pool:
+        haystack = f"{rec.get('common_name') or ''} {rec.get('title') or ''}"
+        if any(_matches_token(haystack, tok) for tok in tokens):
+            if rec["source_key"] not in seen_carc:
+                seen_carc.add(rec["source_key"])
+                carcinogen_matches.append(rec)
+
+    # Deduplicate assessments & pick latest 預先通知公告
+    seen_assess: set[str] = set()
+    dedup_assess: list[dict[str, Any]] = []
+    for rec in assessment_matches:
+        if rec["source_key"] not in seen_assess:
+            seen_assess.add(rec["source_key"])
+            dedup_assess.append(rec)
+
+    pre_notices.sort(key=lambda r: r.get("published_date") or "", reverse=True)
+    latest_pre_notice = pre_notices[0] if pre_notices else None
+
+    await _upsert_records(session, dedup_assess + ([latest_pre_notice] if latest_pre_notice else []))
+
+    result_payload: dict[str, Any] = {
+        "carcinogen_matches": carcinogen_matches,
+        "assessment_matches": dedup_assess,
+        "latest_pre_notice": latest_pre_notice,
+    }
     cache_stmt = insert(AphiaQueryCache).values(
         query_key=qkey,
         keywords_json=tokens,
-        result_json=categorized,
+        result_json=result_payload,
         fetched_at=now,
     )
     cache_stmt = cache_stmt.on_conflict_do_update(
         index_elements=[AphiaQueryCache.query_key],
         set_={
             "keywords_json": tokens,
-            "result_json": categorized,
+            "result_json": result_payload,
             "fetched_at": now,
         },
     )
@@ -441,30 +556,24 @@ async def lookup_aphia_for_tokens(
 
     return {
         "keywords": tokens,
-        **categorized,
+        **result_payload,
         "stale": False,
         "fetched_at": now,
     }
 
 
 async def sync_aphia_catalog(session: AsyncSession, http: httpx.AsyncClient) -> int:
-    """Sync full APHIA static/recent tables (Forbid1..3, Opendata 3/6/8, NewsList) into aphia_records."""
-    tasks = [
-        _fetch_html(http, path, {**extra, "keyword": ""})
-        for path, extra, _ in _TABLE_ENDPOINTS
-    ]
-    tasks.append(_fetch_html(http, "/information/Data/NewsList/", {"type": "new", "keyword": "", "newquery": "true"}))
-    kinds = [kind for _, _, kind in _TABLE_ENDPOINTS] + ["announcement"]
-
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-    all_records: list[dict[str, Any]] = []
-    for kind, res in zip(kinds, results):
-        if isinstance(res, Exception):
-            log.warning("APHIA sync failed (%s): %s", kind, res)
-            continue
-        parsed = parse_news_records(res) if kind == "announcement" else parse_table_records(res, kind)
-        all_records.extend(parsed)
-
+    """Sync 農藥評估資料 (code=2), 可能致癌 PDF (code=3), and recent 預先通知公告."""
+    carc = await _refresh_carcinogen_records(session, http)
+    html2 = await _fetch_text(
+        http, f"{APHIA_ORIGIN}/information/Data/OpendataList/?code=2&keyword=&newquery=true"
+    )
+    assess = parse_assessment_records(html2)
+    html_news = await _fetch_text(
+        http, f"{APHIA_ORIGIN}/information/Data/NewsList/?type=new&keyword=&newquery=true"
+    )
+    news = parse_pre_notice_records(html_news)
+    all_records = carc + assess + news
     await _upsert_records(session, all_records)
     await session.commit()
     return len(all_records)

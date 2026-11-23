@@ -61,10 +61,21 @@ def upgrade() -> None:
             sa.Column("fetched_at", sa.DateTime(timezone=True), nullable=False),
         )
 
+    if not inspector.has_table("chemical_evaluations"):
+        op.create_table(
+            "chemical_evaluations",
+            sa.Column("common_name", sa.String(256), primary_key=True),
+            sa.Column("submitted_date", sa.String(32), nullable=False),
+            sa.Column("notes", sa.Text(), nullable=True),
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        )
+
 
 def downgrade() -> None:
     bind = op.get_bind()
     inspector = sa.inspect(bind)
+    if inspector.has_table("chemical_evaluations"):
+        op.drop_table("chemical_evaluations")
     if inspector.has_table("aphia_query_cache"):
         op.drop_table("aphia_query_cache")
     if inspector.has_table("aphia_records"):

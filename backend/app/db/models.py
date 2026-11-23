@@ -246,3 +246,16 @@ class AphiaQueryCache(Base):
     fetched_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utc_now, onupdate=_utc_now
     )
+
+
+class ChemicalEvaluation(Base):
+    """User-submitted 15-year evaluation report delivery date keyed by chemical common name."""
+
+    __tablename__ = "chemical_evaluations"
+
+    common_name: Mapped[str] = mapped_column(String(256), primary_key=True)
+    submitted_date: Mapped[str] = mapped_column(String(32), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utc_now, onupdate=_utc_now
+    )

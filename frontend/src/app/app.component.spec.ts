@@ -150,10 +150,12 @@ describe('AppComponent', () => {
       .expectOne('/api/registry/%E8%BE%B2%E8%97%A5%E9%80%B200569/aphia')
       .flush({
         reg_no: '農藥進00569',
+        chinese_name: '可濕性硫黃',
         keywords: ['可濕性硫黃', 'SULFUR'],
-        forbid_matches: [],
+        carcinogen_matches: [],
         assessment_matches: [],
-        announcements: [],
+        latest_pre_notice: null,
+        evaluation_submitted_date: null,
         stale: false,
         fetched_at: '2026-11-23T00:00:00Z',
       });

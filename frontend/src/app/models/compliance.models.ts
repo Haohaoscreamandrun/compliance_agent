@@ -109,10 +109,20 @@ export interface AphiaRecordItem {
 
 export interface AphiaLookupResponse {
   reg_no: string;
+  chinese_name: string | null;
   keywords: string[];
-  forbid_matches: AphiaRecordItem[];
+  carcinogen_matches: AphiaRecordItem[];
   assessment_matches: AphiaRecordItem[];
-  announcements: AphiaRecordItem[];
+  latest_pre_notice: AphiaRecordItem | null;
+  evaluation_submitted_date: string | null;
   stale: boolean;
   fetched_at: string;
+}
+
+export interface EvaluationSubmissionResponse {
+  reg_no: string;
+  common_name: string;
+  submitted_date: string;
+  notes: string | null;
+  updated_at: string;
 }

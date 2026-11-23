@@ -1,10 +1,10 @@
-"""Unit tests for APHIA HTML parsing, URL/token safety, 6h cache, and registry route."""
+"""Unit tests for APHIA assessment/carcinogen/pre-notice parsing, URL/token safety, and 6h cache."""
 
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -13,17 +13,19 @@ from app.services.aphia_client import (
     _matches_token,
     extract_ingredient_tokens,
     lookup_aphia_for_tokens,
-    parse_news_records,
-    parse_table_records,
+    parse_assessment_records,
+    parse_pre_notice_records,
     validate_aphia_url,
 )
 
 
-def test_validate_aphia_url_guards_origin_and_schemes() -> None:
+def test_validate_aphia_url_guards_origin_and_encodes_paths() -> None:
     assert (
         validate_aphia_url("/information/Data/NewsContent/3453")
         == "https://pesticide.aphia.gov.tw/information/Data/NewsContent/3453"
     )
+    encoded = validate_aphia_url("/information/file/opendata/可能致癌.pdf")
+    assert encoded is not None and "%E5%8F%AF%E8%83%BD" in encoded
     assert validate_aphia_url("javascript:alert(1)") is None
     assert validate_aphia_url("data:text/html,hi") is None
     assert validate_aphia_url("https://pesticide.aphia.gov.tw.evil.com/x") is None
@@ -38,32 +40,37 @@ def test_extract_ingredient_tokens_and_boundary_match() -> None:
     assert "2,4-D" in tokens
     assert "A" not in tokens
 
-    assert _matches_token("2,4-D 禁用公告", "2,4-D") is True
+    assert _matches_token("2,4-D 評估", "2,4-D") is True
     assert _matches_token("2,4-DB 評估", "2,4-D") is False
     assert _matches_token("嘉磷塞原體", "嘉磷塞") is True
 
 
-def test_parse_table_and_news_html() -> None:
-    table_html = """
+def test_parse_assessment_and_pre_notice_html() -> None:
+    assess_html = """
     <table>
-      <thead><tr><th>普通名稱</th><th>公告日期</th><th>說明</th></tr></thead>
+      <thead><tr><th>檔案名稱</th><th>檔案大小</th><th>發佈日期</th></tr></thead>
       <tbody>
-        <tr><td><a href="/information/Data/NewsContent/101">巴拉刈</a></td><td>2020-02-01</td><td>全面禁用</td></tr>
+        <tr>
+          <td><a href="/information/file/opendata/派滅芬.pdf">派滅芬(pydiflumetofen)112年登記新有效成分（PDF）</a></td>
+          <td>488 KB</td>
+          <td>2023-01-05</td>
+        </tr>
       </tbody>
     </table>
     """
-    recs = parse_table_records(table_html, "forbid_banned")
+    recs = parse_assessment_records(assess_html)
     assert len(recs) == 1
-    assert recs[0]["common_name"] == "巴拉刈"
-    assert recs[0]["published_date"] == "2020-02-01"
-    assert recs[0]["detail_url"] == "https://pesticide.aphia.gov.tw/information/Data/NewsContent/101"
+    assert recs[0]["source_kind"] == "assessment"
+    assert recs[0]["published_date"] == "2023-01-05"
+    assert recs[0]["detail_url"].startswith("https://pesticide.aphia.gov.tw/information/file/opendata/")
 
     news_html = """
     <ul class="news-list">
-      <li><a href="/information/Data/NewsContent/3453"><span class="news-date">2026-11-11</span><span class="news-name-long">預先通知公告</span></a></li>
+      <li><a href="/information/Data/NewsContent/3437"><span class="news-date">2026-11-20</span><span class="news-name-long">代噴人員登錄名冊</span></a></li>
+      <li><a href="/information/Data/NewsContent/3453"><span class="news-date">2026-11-11</span><span class="news-name-long">預先通知公告「可濕性硫黃」之農藥使用方法</span></a></li>
     </ul>
     """
-    news = parse_news_records(news_html)
+    news = parse_pre_notice_records(news_html)
     assert len(news) == 1
     assert news[0]["source_kind"] == "announcement"
     assert news[0]["source_key"] == "3453"
@@ -75,7 +82,7 @@ async def test_lookup_aphia_uses_6h_cache_even_for_zero_matches() -> None:
     fresh = AphiaQueryCache(
         query_key="k",
         keywords_json=["嘉磷塞"],
-        result_json={"forbid_matches": [], "assessment_matches": [], "announcements": []},
+        result_json={"carcinogen_matches": [], "assessment_matches": [], "latest_pre_notice": None},
         fetched_at=datetime.now(timezone.utc) - timedelta(minutes=10),
     )
     session = MagicMock()
@@ -87,7 +94,9 @@ async def test_lookup_aphia_uses_6h_cache_even_for_zero_matches() -> None:
 
     res = await lookup_aphia_for_tokens(session, http, ["嘉磷塞"])
     assert res["stale"] is False
-    assert res["forbid_matches"] == []
+    assert res["carcinogen_matches"] == []
+    assert res["assessment_matches"] == []
+    assert res["latest_pre_notice"] is None
     http.get.assert_not_called()
 
 
@@ -95,21 +104,24 @@ async def test_lookup_aphia_uses_6h_cache_even_for_zero_matches() -> None:
 async def test_lookup_aphia_falls_back_to_stale_cache_on_upstream_error() -> None:
     old = AphiaQueryCache(
         query_key="k",
-        keywords_json=["巴拉刈"],
+        keywords_json=["依普座"],
         result_json={
-            "forbid_matches": [{"source_kind": "forbid_banned", "source_key": "1", "title": "巴拉刈"}],
+            "carcinogen_matches": [{"source_kind": "carcinogen", "source_key": "1", "title": "依普座 (Epoxiconazole) [B級]"}],
             "assessment_matches": [],
-            "announcements": [],
+            "latest_pre_notice": None,
         },
         fetched_at=datetime.now(timezone.utc) - timedelta(days=2),
     )
     session = MagicMock()
     session.execute = AsyncMock(
-        return_value=SimpleNamespace(scalar_one_or_none=lambda: old)
+        side_effect=[
+            SimpleNamespace(scalar_one_or_none=lambda: old),
+            SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [])),
+        ]
     )
     http = MagicMock()
     http.get = AsyncMock(side_effect=RuntimeError("timeout"))
 
-    res = await lookup_aphia_for_tokens(session, http, ["巴拉刈"])
+    res = await lookup_aphia_for_tokens(session, http, ["依普座"])
     assert res["stale"] is True
-    assert len(res["forbid_matches"]) == 1
+    assert len(res["carcinogen_matches"]) == 1

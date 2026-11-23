@@ -9,6 +9,7 @@ import {
   DocumentSummary,
   DocumentUploadResponse,
   EntityAlias,
+  EvaluationSubmissionResponse,
   RegistryLookupResponse,
 } from '../models/compliance.models';
 
@@ -39,6 +40,17 @@ export class ComplianceApiService {
     return this.http.get<AphiaLookupResponse>(
       `${this.baseUrl}/registry/${encodeURIComponent(regNo.trim())}/aphia`,
       { params },
+    );
+  }
+
+  saveAphiaEvaluation(
+    regNo: string,
+    submittedDate: string,
+    notes?: string,
+  ): Observable<EvaluationSubmissionResponse> {
+    return this.http.post<EvaluationSubmissionResponse>(
+      `${this.baseUrl}/registry/${encodeURIComponent(regNo.trim())}/aphia/evaluation`,
+      { submitted_date: submittedDate, notes: notes ?? null },
     );
   }
 

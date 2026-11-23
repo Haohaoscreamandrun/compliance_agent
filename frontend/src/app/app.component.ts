@@ -102,6 +102,9 @@ export class AppComponent implements OnInit {
   readonly regNo = signal('農藥進00569');
   readonly moaSnapshot = signal<RegistryLookupResponse | null>(null);
   readonly aphiaSnapshot = signal<AphiaLookupResponse | null>(null);
+  readonly aphiaRefreshing = signal(false);
+  readonly evalDateInput = signal('');
+  readonly evalSaving = signal(false);
   readonly baselinesLoaded = signal(false);
   readonly baselineDocs = signal<DocumentSummary[]>([]);
   readonly baselinesLoading = signal(false);
@@ -211,6 +214,7 @@ export class AppComponent implements OnInit {
         next: ({ docs, aphia }) => {
           this.baselineDocs.set(docs);
           this.aphiaSnapshot.set(aphia);
+          this.evalDateInput.set(aphia?.evaluation_submitted_date ?? '');
           this.baselinesLoading.set(false);
           this.api
             .getCachedAuditReport(target)
@@ -399,21 +403,50 @@ export class AppComponent implements OnInit {
     }
   }
 
-  aphiaKindLabel(kind: string): string {
-    switch (kind) {
-      case 'forbid_banned':
-        return '禁用農藥';
-      case 'forbid_restricted':
-        return '限用農藥';
-      case 'forbid_deleted':
-        return '刪除農藥';
-      case 'carcinogen':
-        return '可能致癌';
-      case 'assessment':
-        return '評估資料';
-      default:
-        return '農藥公告';
-    }
+  refreshAphia(): void {
+    const target = this.regNo().trim();
+    if (!target || this.aphiaRefreshing()) return;
+    this.aphiaRefreshing.set(true);
+    this.api
+      .lookupAphia(target, true)
+      .pipe(
+        catchError(() => of(null)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((aphia) => {
+        if (aphia) {
+          this.aphiaSnapshot.set(aphia);
+          this.evalDateInput.set(aphia.evaluation_submitted_date ?? '');
+        }
+        this.aphiaRefreshing.set(false);
+      });
+  }
+
+  saveEvaluationDate(): void {
+    const target = this.regNo().trim();
+    const dateVal = this.evalDateInput().trim();
+    if (!target || !dateVal || this.evalSaving()) return;
+    this.evalSaving.set(true);
+    this.api
+      .saveAphiaEvaluation(target, dateVal)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (saved) => {
+          this.aphiaSnapshot.update((cur) =>
+            cur ? { ...cur, evaluation_submitted_date: saved.submitted_date } : cur,
+          );
+          this.evalSaving.set(false);
+          this.snackBar.open(`已儲存 ${saved.common_name} 評估送件日：${saved.submitted_date}`, '關閉', {
+            duration: 4000,
+          });
+        },
+        error: (err) => {
+          this.evalSaving.set(false);
+          this.snackBar.open(extractApiErrorMessage(err, '儲存評估送件日失敗'), '關閉', {
+            duration: 5000,
+          });
+        },
+      });
   }
 
   toggleTheme(): void {

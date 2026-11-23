@@ -378,4 +378,35 @@
     color: var(--status-danger-fg);
     border-color: var(--status-danger-fg);
   }
+
+  &.is-warn {
+    background: var(--status-warn-bg);
+    color: var(--status-warn-fg);
+    border-color: var(--status-warn-fg);
+  }
+
+  &.is-ok {
+    background: var(--status-ok-bg);
+    color: var(--status-ok-fg);
+    border-color: var(--status-ok-fg);
+  }
+}
+
+.aphia-eval-form,
+.aphia-date-controls,
+.aphia-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.84rem;
+}
+
+.aphia-date-input {
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
 }
