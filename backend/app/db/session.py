@@ -64,6 +64,30 @@ async def init_db_schema(engine: AsyncEngine) -> None:
                     "WHERE is_active_baseline IS TRUE AND reg_no IS NOT NULL"
                 )
             )
+            await conn.execute(
+                text(
+                    """
+                    DO $$
+                    BEGIN
+                      IF EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_name = 'moa_registry' AND column_name = 'crop_uses_json'
+                      ) AND NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_name = 'moa_registry' AND column_name = 'approved_usages_json'
+                      ) THEN
+                        ALTER TABLE moa_registry RENAME COLUMN crop_uses_json TO approved_usages_json;
+                      END IF;
+                    END $$;
+                    """
+                )
+            )
+            await conn.execute(
+                text(
+                    "ALTER TABLE moa_registry ADD COLUMN IF NOT EXISTS "
+                    "approved_usages_json JSONB"
+                )
+            )
 
 
 async def get_db_session(request: Request) -> AsyncGenerator[AsyncSession, None]:

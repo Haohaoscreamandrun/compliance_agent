@@ -21,6 +21,20 @@ def upgrade() -> None:
     bind = op.get_bind()
     inspector = sa.inspect(bind)
 
+    if inspector.has_table("moa_registry"):
+        cols = {c["name"] for c in inspector.get_columns("moa_registry")}
+        if "crop_uses_json" in cols and "approved_usages_json" not in cols:
+            op.alter_column(
+                "moa_registry",
+                "crop_uses_json",
+                new_column_name="approved_usages_json",
+            )
+        elif "approved_usages_json" not in cols:
+            op.add_column(
+                "moa_registry",
+                sa.Column("approved_usages_json", postgresql.JSONB(), nullable=True),
+            )
+
     if not inspector.has_table("aphia_records"):
         op.create_table(
             "aphia_records",
