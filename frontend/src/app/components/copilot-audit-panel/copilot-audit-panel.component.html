@@ -57,76 +57,112 @@
       <p class="summary-en" lang="en">{{ r.executive_summary_en }}</p>
     </div>
 
-    @if (r.checklist_items.length === 0) {
-      <p class="all-clear">目前無標示差異項目。</p>
-    } @else {
-      <div tabindex="0" role="region" aria-labelledby="checklist-caption" class="table-wrapper">
-        <table mat-table [dataSource]="r.checklist_items">
-          <caption id="checklist-caption">標籤更新檢查清單 ({{ r.checklist_items.length }} 項)</caption>
+    <mat-tab-group animationDuration="150ms">
+      <mat-tab [label]="'基本資料比對 (' + basicChecklistItems().length + ')'">
+        <div class="tab-body">
+          <ng-container
+            *ngTemplateOutlet="
+              checklistTable;
+              context: {
+                items: basicChecklistItems(),
+                captionId: 'basic-checklist-caption',
+                caption: '標籤更新檢查清單 (' + basicChecklistItems().length + ' 項)',
+                emptyText: '目前無基本資料標示差異項目。'
+              }
+            "
+          />
+        </div>
+      </mat-tab>
 
-          <ng-container matColumnDef="field_name">
-            <th mat-header-cell *matHeaderCellDef scope="col">欄位名稱</th>
-            <th mat-cell *matCellDef="let item" scope="row">{{ item.field_name }}</th>
-          </ng-container>
+      <mat-tab [label]="'未登載使用範圍 (' + cropUsageItems().length + ')'">
+        <div class="tab-body">
+          <ng-container
+            *ngTemplateOutlet="
+              checklistTable;
+              context: {
+                items: cropUsageItems(),
+                captionId: 'crop-usage-caption',
+                caption: '未登載 / 差異使用範圍 (' + cropUsageItems().length + ' 項)',
+                emptyText: '目前無未登載或差異之核准使用範圍。'
+              }
+            "
+          />
+        </div>
+      </mat-tab>
+    </mat-tab-group>
 
-          <ng-container matColumnDef="action_status">
-            <th mat-header-cell *matHeaderCellDef scope="col">狀態</th>
-            <td mat-cell *matCellDef="let item">
-              <span class="status-pill" [attr.data-status]="item.action_status">
-                {{ statusLabel(item.action_status) }}
-              </span>
-            </td>
-          </ng-container>
+    <ng-template #checklistTable let-items="items" let-captionId="captionId" let-caption="caption" let-emptyText="emptyText">
+      @if (items.length === 0) {
+        <p class="all-clear">{{ emptyText }}</p>
+      } @else {
+        <div tabindex="0" role="region" [attr.aria-labelledby]="captionId" class="table-wrapper">
+          <table mat-table [dataSource]="items">
+            <caption [id]="captionId">{{ caption }}</caption>
 
-          <ng-container matColumnDef="current_label_value">
-            <th mat-header-cell *matHeaderCellDef scope="col">現行標示</th>
-            <td mat-cell *matCellDef="let item" class="cell-value">{{ item.current_label_value }}</td>
-          </ng-container>
+            <ng-container matColumnDef="field_name">
+              <th mat-header-cell *matHeaderCellDef scope="col">欄位名稱</th>
+              <th mat-cell *matCellDef="let item" scope="row">{{ item.field_name }}</th>
+            </ng-container>
 
-          <ng-container matColumnDef="recommended_new_value">
-            <th mat-header-cell *matHeaderCellDef scope="col">建議 / 新值</th>
-            <td mat-cell *matCellDef="let item" class="cell-value">
-              <div>{{ item.recommended_new_value }}</div>
-              <small class="rationale" lang="en">{{ item.rationale }}</small>
-            </td>
-          </ng-container>
+            <ng-container matColumnDef="action_status">
+              <th mat-header-cell *matHeaderCellDef scope="col">狀態</th>
+              <td mat-cell *matCellDef="let item">
+                <span class="status-pill" [attr.data-status]="item.action_status">
+                  {{ statusLabel(item.action_status) }}
+                </span>
+              </td>
+            </ng-container>
 
-          <ng-container matColumnDef="citations">
-            <th mat-header-cell *matHeaderCellDef scope="col">座標引用</th>
-            <td mat-cell *matCellDef="let item" class="citations-cell">
-              <div class="citations-list">
-                @if (item.current_label_citation; as lc) {
-                  <button
-                    type="button"
-                    mat-stroked-button
-                    class="cite-btn cite-label"
-                    [attr.aria-label]="'檢視「' + item.field_name + '」標籤第 ' + lc.page + ' 頁引用'"
-                    [title]="lc.doc_id + ' P' + lc.page"
-                    (click)="selectCitation.emit(lc)"
-                  >
-                    標籤 P{{ lc.page }}
-                  </button>
-                }
-                @for (sc of item.supporting_citations; track sc.doc_id + ':' + sc.page + ':' + $index) {
-                  <button
-                    type="button"
-                    mat-stroked-button
-                    class="cite-btn cite-support"
-                    [attr.aria-label]="'檢視「' + item.field_name + '」佐證文件 ' + sc.doc_id + ' 第 ' + sc.page + ' 頁引用'"
-                    [title]="sc.doc_id + ' P' + sc.page"
-                    (click)="selectCitation.emit(sc)"
-                  >
-                    佐證 P{{ sc.page }}
-                  </button>
-                }
-              </div>
-            </td>
-          </ng-container>
+            <ng-container matColumnDef="current_label_value">
+              <th mat-header-cell *matHeaderCellDef scope="col">現行標示</th>
+              <td mat-cell *matCellDef="let item" class="cell-value">{{ item.current_label_value }}</td>
+            </ng-container>
 
-          <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
-          <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
-        </table>
-      </div>
-    }
+            <ng-container matColumnDef="recommended_new_value">
+              <th mat-header-cell *matHeaderCellDef scope="col">建議 / 新值</th>
+              <td mat-cell *matCellDef="let item" class="cell-value">
+                <div>{{ item.recommended_new_value }}</div>
+                <small class="rationale" lang="en">{{ item.rationale }}</small>
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="citations">
+              <th mat-header-cell *matHeaderCellDef scope="col">座標引用</th>
+              <td mat-cell *matCellDef="let item" class="citations-cell">
+                <div class="citations-list">
+                  @if (item.current_label_citation; as lc) {
+                    <button
+                      type="button"
+                      mat-stroked-button
+                      class="cite-btn cite-label"
+                      [attr.aria-label]="'檢視「' + item.field_name + '」標籤第 ' + lc.page + ' 頁引用'"
+                      [title]="lc.doc_id + ' P' + lc.page"
+                      (click)="selectCitation.emit(lc)"
+                    >
+                      標籤 P{{ lc.page }}
+                    </button>
+                  }
+                  @for (sc of item.supporting_citations; track sc.doc_id + ':' + sc.page + ':' + $index) {
+                    <button
+                      type="button"
+                      mat-stroked-button
+                      class="cite-btn cite-support"
+                      [attr.aria-label]="'檢視「' + item.field_name + '」佐證文件 ' + sc.doc_id + ' 第 ' + sc.page + ' 頁引用'"
+                      [title]="sc.doc_id + ' P' + sc.page"
+                      (click)="selectCitation.emit(sc)"
+                    >
+                      佐證 P{{ sc.page }}
+                    </button>
+                  }
+                </div>
+              </td>
+            </ng-container>
+
+            <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
+            <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+          </table>
+        </div>
+      }
+    </ng-template>
   }
 </mat-card>

@@ -339,13 +339,17 @@
 
       <div class="split-grid">
         @if (auditLoading() || auditReport() || auditError()) {
-          <app-copilot-audit-panel
-            [report]="auditReport()"
-            [loading]="auditLoading()"
-            [errorMessage]="auditError()"
-            (selectCitation)="onSelectCitation($event)"
-            (forceRefresh)="runAudit(true)"
-          />
+          @defer {
+            <app-copilot-audit-panel
+              [report]="auditReport()"
+              [loading]="auditLoading()"
+              [errorMessage]="auditError()"
+              (selectCitation)="onSelectCitation($event)"
+              (forceRefresh)="runAudit(true)"
+            />
+          } @placeholder {
+            <mat-progress-bar mode="indeterminate" aria-label="載入審查面板中"></mat-progress-bar>
+          }
         }
         <app-bbox-svg-viewer
           [docId]="viewerDocId()"

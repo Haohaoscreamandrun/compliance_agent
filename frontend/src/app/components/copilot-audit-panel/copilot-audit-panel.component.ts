@@ -1,9 +1,11 @@
-import { Component, input, output } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
+import { Component, computed, input, output } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTableModule } from '@angular/material/table';
+import { MatTabsModule } from '@angular/material/tabs';
 
 import {
   ActionStatus,
@@ -14,7 +16,15 @@ import {
 
 @Component({
   selector: 'app-copilot-audit-panel',
-  imports: [MatCardModule, MatButtonModule, MatChipsModule, MatProgressBarModule, MatTableModule],
+  imports: [
+    NgTemplateOutlet,
+    MatCardModule,
+    MatButtonModule,
+    MatChipsModule,
+    MatProgressBarModule,
+    MatTableModule,
+    MatTabsModule,
+  ],
   templateUrl: './copilot-audit-panel.component.html',
   styleUrl: './copilot-audit-panel.component.scss',
 })
@@ -24,6 +34,13 @@ export class CopilotAuditPanelComponent {
   readonly report = input<ComplianceAuditReport | null>(null);
   readonly loading = input<boolean>(false);
   readonly errorMessage = input<string | null>(null);
+
+  readonly basicChecklistItems = computed(() =>
+    (this.report()?.checklist_items ?? []).filter((item) => item.category !== 'crop_usage_sync'),
+  );
+  readonly cropUsageItems = computed(() =>
+    (this.report()?.checklist_items ?? []).filter((item) => item.category === 'crop_usage_sync'),
+  );
 
   readonly selectCitation = output<CitationRef>();
   readonly forceRefresh = output<void>();
