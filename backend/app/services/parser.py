@@ -223,7 +223,7 @@ async def parse_document_pages(
     windows = build_page_windows(pages)
     resolution = (
         types.MediaResolution.MEDIA_RESOLUTION_HIGH
-        if doc_type == "label"
+        if doc_type in ("label", "change_cert")
         else types.MediaResolution.MEDIA_RESOLUTION_MEDIUM
     )
     candidate_models = list(dict.fromkeys([model_name, *(fallback_models or [])]))
