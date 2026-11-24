@@ -64,7 +64,8 @@
 - [x] **CL 10.2 (`feat(crop-usage)`):** Extract label crop-usage tables (`extraction.py`, `extraction_prompts.py`), compare against MOA `approved_usages_json` (`tools.py`, `copilot.py`), and split findings into a dedicated `未登載使用範圍` `mat-tab` (`copilot-audit-panel.component.*`).
 - [x] **CL 10.3 (`feat(ui-diff)`):** Replace per-citation buttons with a single `查看差異` side-by-side BBox viewer (`bbox-svg-viewer.component.*`, `app.component.*`) and widen the multi-entry upload dialog (`upload-dialog.component.scss`).
 - [x] **CL 10.4 (`feat(observability,config)`):** Log Gemini model, latency, and token usage on success (`parser.py`, `copilot.py`, `main.py`) and set confirmed-active fallback chain `["gemini-3.6-flash", "gemini-3.5-flash-lite"]` (`config.py`).
-- [ ] **Checkpoint / PR #10:** Push `develop` (`b113584`–`1c233c4` + Component 10 docs) and merge `develop` → `main`.
+- [x] **CL 10.5 (`fix(prompts,parser)`):** Skip TECO legalization cover pages, fix `issuing_authority` schema alignment, anchor LoA body/notary extraction, and bump `change_cert` to `MEDIA_RESOLUTION_HIGH` (`extraction_prompts.py`, `parser.py`).
+- [ ] **Checkpoint / PR #10:** Push `develop` (`b113584`–`1c233c4`, `CL 10.5` + Component 10 docs) and merge `develop` → `main`.
 
 ## Future Enhancements (Post-MVP)
 
