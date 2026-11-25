@@ -12,6 +12,11 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import (
+    CompanyUserContext,
+    get_current_company_user,
+    get_optional_company_user,
+)
 from app.config import Settings
 from app.db.models import ChemicalEvaluation, _utc_now
 from app.db.session import get_db_session
@@ -87,6 +92,7 @@ async def lookup_aphia_by_reg_no(
     reg_no: str,
     request: Request,
     refresh: bool = False,
+    user: CompanyUserContext | None = Depends(get_optional_company_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> AphiaLookupResponse:
     """Lookup APHIA carcinogen PDF, 15-year assessment (code=2), and latest 預先通知公告."""
@@ -110,10 +116,13 @@ async def lookup_aphia_by_reg_no(
 
     common_key = (snap.chinese_name or snap.english_name or "").strip()
     eval_row = None
-    if common_key:
+    if common_key and user is not None:
         eval_row = (
             await session.execute(
-                select(ChemicalEvaluation).where(ChemicalEvaluation.common_name == common_key)
+                select(ChemicalEvaluation).where(
+                    ChemicalEvaluation.company_id == user.company_id,
+                    ChemicalEvaluation.common_name == common_key,
+                )
             )
         ).scalar_one_or_none()
 
@@ -140,6 +149,7 @@ async def save_evaluation_submission_date(
     reg_no: str,
     payload: EvaluationSubmissionRequest,
     request: Request,
+    user: CompanyUserContext = Depends(get_current_company_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> EvaluationSubmissionResponse:
     """Save 15-year evaluation report submission date keyed by the chemical's common name."""
@@ -167,13 +177,14 @@ async def save_evaluation_submission_date(
     stmt = (
         pg_insert(ChemicalEvaluation)
         .values(
+            company_id=user.company_id,
             common_name=common_name,
             submitted_date=submitted_iso,
             notes=payload.notes,
             updated_at=now,
         )
         .on_conflict_do_update(
-            index_elements=[ChemicalEvaluation.common_name],
+            index_elements=[ChemicalEvaluation.company_id, ChemicalEvaluation.common_name],
             set_={
                 "submitted_date": submitted_iso,
                 "notes": payload.notes,
@@ -195,6 +206,7 @@ async def save_evaluation_submission_date(
 @router.post("/aphia/sync")
 async def sync_aphia_records(
     request: Request,
+    user: CompanyUserContext = Depends(get_current_company_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, int]:
     """Sync APHIA static/recent tables into PostgreSQL aphia_records."""

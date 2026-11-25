@@ -13,7 +13,7 @@ from pydantic import ValidationError
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Document, MoaRegistry
+from app.db.models import DEFAULT_COMPANY_ID, Document, MoaRegistry
 from app.schemas.extraction import (
     MsdsExtraction,
     NotarizedCertExtraction,
@@ -57,11 +57,13 @@ class CopilotToolset:
         http: httpx.AsyncClient,
         moa_api_base_url: str,
         confirmed_aliases: set[tuple[str, str]] | None = None,
+        company_id: str = DEFAULT_COMPANY_ID,
     ) -> None:
         self.session = session
         self.http = http
         self.moa_api_base_url = moa_api_base_url
         self.confirmed_aliases = confirmed_aliases or set()
+        self.company_id = company_id
 
         self._moa: MoaRegistry | None = None
         self.moa_stale: bool = False
@@ -153,6 +155,7 @@ class CopilotToolset:
         stmt = (
             select(Document)
             .where(
+                Document.company_id == self.company_id,
                 Document.doc_type.in_(("label", "msds", "change_cert")),
                 or_(
                     Document.reg_no == canon_reg,
@@ -224,7 +227,11 @@ class CopilotToolset:
 
         stmt = (
             select(Document)
-            .where(Document.doc_type == "official_letter", or_(*filters))
+            .where(
+                Document.company_id == self.company_id,
+                Document.doc_type == "official_letter",
+                or_(*filters),
+            )
             .order_by(Document.reg_no.is_(None).asc(), Document.uploaded_at.desc())
             .limit(50)
         )
