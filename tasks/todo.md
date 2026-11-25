@@ -67,6 +67,21 @@
 - [x] **CL 10.5 (`fix(prompts,parser)`):** Skip TECO legalization cover pages, fix `issuing_authority` schema alignment, anchor LoA body/notary extraction, and bump `change_cert` to `MEDIA_RESOLUTION_HIGH` (`extraction_prompts.py`, `parser.py`).
 - [ ] **Checkpoint / PR #10:** Push `develop` (`b113584`–`1c233c4`, `CL 10.5` + Component 10 docs) and merge `develop` → `main`.
 
+## Component 11: Multi-Tenant Company Isolation & Cloudflare Access Identity (Post-MVP #2)
+
+See detailed design in [`tasks/plan.md`](plan.md).
+
+- [ ] **Task 11.1 (`feat(edge-auth)`):** Verify `Cf-Access-Jwt-Assertion` (JWKS + `aud`) in `src/worker.ts`, strip client-spoofed `X-Auth-User-Email`, and forward verified email to `ComplianceBackend`. *(S: `src/worker.ts`, `src/accessAuth.ts`, `src/accessAuth.test.ts`)*
+- [ ] **Task 11.2 (`feat(db-tenancy)`):** Add `companies`, `company_users` (explicit allowlist), & `company_access_requests` and Alembic migration `003` adding `company_id` (backfilled to `default` / `public_demo`) + scoped unique constraints on `documents`, `entity_aliases`, `audit_reports`, and `chemical_evaluations`. *(M: `backend/app/db/models.py`, `backend/alembic/versions/003_*.py`, `backend/app/db/session.py`)*
+- [ ] **Checkpoint 1 (Tasks 11.1–11.2):** `node --test`, `tsc -p tsconfig.worker.json`, `alembic upgrade head`, and `pytest -q` pass.
+- [ ] **Task 11.3 (`feat(api-tenancy-docs)`):** Add FastAPI `get_current_company_user` dependency (explicit `company_users` allowlist), scope `/api/documents*` & R2 keys (`companies/{company_id}/pages/{doc_id}/...`) by `company_id`, and enforce tenant ownership on page-image fetches (allowing `public_demo` read-only). *(M: `backend/app/api/deps.py`, `routes_documents.py`, `storage.py`, `src/worker.ts`, tests)*
+- [ ] **Task 11.4 (`feat(api-tenancy-audit)`):** Scope `routes_copilot.py`, `routes_entity_aliases.py`, `routes_registry.py` (`chemical_evaluations`), `tools.py`, and audit `cache_key` by `company_id` (keeping `moa_registry` & `aphia_*` global, and `public_demo` `農藥進99001` open for read-only demo). *(M: `routes_copilot.py`, `routes_entity_aliases.py`, `routes_registry.py`, `tools.py`, tests)*
+- [ ] **Checkpoint 2 (Tasks 11.3–11.4):** Cross-company isolation tests prove Company A users share data while Company B cannot read/modify/delete Company A's documents, aliases, or audits.
+- [ ] **Task 11.5 (`feat(ui-identity)`):** Add `GET /api/me`, show active user email + company badge in Angular top bar, add **"Try Demo Audit"** (`農藥進99001`) button, and add **"Join Company"** application dialog for un-allowlisted users. *(M: backend route, `compliance-api.service.ts`, `app.component.*`, join dialog)*
+- [ ] **Task 11.6 (`feat(admin-onboarding)`):** Add `POST /api/access-requests` plus admin-only (`role == 'admin'`) `GET /api/admin/access-requests` and `POST /api/admin/company-users` to assign/approve a user into a company. *(S: backend routes + tests)*
+- [ ] **Task 11.7 (`feat(rate-limit)`):** Add Cloudflare Workers `ratelimits` binding in `wrangler.jsonc` keyed by verified email on Gemini `POST` routes in `src/worker.ts`. *(S: `wrangler.jsonc`, `src/worker.ts`)*
+- [ ] **Checkpoint / PR #11:** Review & merge `develop` → `main` for Component 11.
+
 ## Future Enhancements (Post-MVP)
 
 - [x] **APHIA Announcements & Chemical Assessments:** Add separate lookup/sync for `pesticide.aphia.gov.tw` official announcements (`農藥公告`), banned/restricted/carcinogen lists, and ACRI chemical risk assessments (not exposed in `EIR027`).
