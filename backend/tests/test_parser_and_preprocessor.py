@@ -316,6 +316,31 @@ async def test_parse_document_pages_fails_over_on_503_server_error() -> None:
     assert res.model_used == "gemini-3.7-flash"
     assert res.used_fallback is True
 
+    # Also verify httpx2.ReadTimeout (google-genai internal transport) fails over cleanly
+    import httpx2
+
+    tried_models.clear()
+
+    async def timeout_then_ok(*, model, contents, config):
+        tried_models.append(model)
+        if model == "gemini-3.8-flash":
+            raise httpx2.ReadTimeout("timed out")
+        payload = ProductLabelExtraction(
+            reg_no={"verbatim_text": "農藥製00001", "value": "農藥製00001", "page": 1, "box_2d": [10, 10, 40, 200]}
+        )
+        return SimpleNamespace(text=payload.model_dump_json(), candidates=[SimpleNamespace(finish_reason="STOP")])
+
+    timeout_client = SimpleNamespace(aio=SimpleNamespace(models=SimpleNamespace(generate_content=timeout_then_ok)))
+    res2 = await parse_document_pages(
+        timeout_client,  # type: ignore[arg-type]
+        "gemini-3.8-flash",
+        "label",
+        pages,
+        fallback_models=["gemini-3.7-flash"],
+    )
+    assert tried_models == ["gemini-3.8-flash", "gemini-3.7-flash"]
+    assert res2.used_fallback is True
+
 
 def test_extract_clauses_for_db_flattens_and_validates_constraints() -> None:
     label = ProductLabelExtraction(

@@ -15,6 +15,21 @@ from google.genai import errors as genai_errors
 from google.genai import types
 from pydantic import BaseModel
 
+try:
+    import httpx2  # google-genai >=1.x internal async transport
+    _RETRYABLE_PARSE_ERRORS: tuple[type[BaseException], ...] = (
+        genai_errors.ServerError,
+        httpx.TimeoutException,
+        httpx2.TimeoutException,
+        TimeoutError,
+    )
+except ImportError:
+    _RETRYABLE_PARSE_ERRORS = (
+        genai_errors.ServerError,
+        httpx.TimeoutException,
+        TimeoutError,
+    )
+
 from app.db.models import VALID_DOC_TYPES
 from app.prompts.extraction_prompts import EXTRACTION_PROMPTS
 from app.schemas.extraction import SCHEMA_BY_DOC_TYPE
@@ -218,7 +233,7 @@ async def _generate_with_5xx_fallback(
                 getattr(usage, "total_token_count", None),
             )
             return response, model
-        except (genai_errors.ServerError, httpx.TimeoutException, TimeoutError) as exc:
+        except _RETRYABLE_PARSE_ERRORS as exc:
             last_error = exc
             if idx + 1 < len(candidate_models):
                 log.warning(
