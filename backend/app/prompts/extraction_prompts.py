@@ -18,14 +18,23 @@ GROUNDING RULES (MANDATORY):
 """.strip()
 
 EXTRACTION_PROMPTS: dict[str, str] = {
-    "label": f"""You are a Taiwan agrochemical Regulatory Affairs (RA) label inspector.
-Extract all structured fields from this product or active-ingredient (原體) label (JPEG image or PDF):
-- Extract `common_name`, `foreign_manufacturer_name`, and `foreign_manufacturer_address` with EXACT printed spelling verbatim (do not translate or alter abbreviations).
-- For `formulation_type`, look for the printed **Chinese** formulation type FIRST (e.g. `水分散性粒劑`, `水懸劑`, `懸浮劑`, `乳劑`, `可濕性粉劑`, `粒劑`, `溶液`), and extract its exact printed Chinese text in `verbatim_text` (and canonical code or Chinese text in `value`); fall back to an English formulation code only if no Chinese formulation type is printed on the label. Do NOT extract trade-name suffixes such as `DF` in `克魔力®DF`.
-- Normalize `reg_no` in `value` to canonical format without 字/第/號 (e.g., '農藥製00001', '農藥進00001', '農藥原進00001', '農藥原製00195').
-- Visually classify EVERY GHS hazard diamond pictogram on the label into `GHS01`-`GHS09` with its individual tight `box_2d`.
-- Extract EVERY row of the label's `使用方法` / `使用範圍` (allowed crop & pest usage) table into `crop_usage_table[]` with verbatim `crop_name`, `pest_name`, `dosage_per_ha`, `dilution_ratio`, `application_timing`, `application_count`, `interval_days`, `phi_days`, and `notes` and tight `box_2d` coordinates.
-- IMPORTANT: Look carefully for handwritten, drawn, redline, or stamped instructions added by APHIA (防檢署) directly on the label. Capture every single APHIA modification instruction in `aphia_review_annotations`.
+    "label": f"""You are a Taiwan agrochemical Regulatory Affairs (RA) label inspector following Taiwan's 農藥標示管理辦法 (Agro-pesticide Labeling Management Regulations).
+Extract all structured fields from this product or active-ingredient (原體) label (JPEG image or multi-page PDF):
+- Front panel layout (主標示):
+  - `reg_no`: extract from the permit header (e.g. `農藥進字第03968號`), normalizing `value` without 字/第/號 (e.g. `'農藥製00001'`, `'農藥進03968'`, `'農藥原進00001'`, `'農藥原製00195'`).
+  - `product_chinese_name` vs `common_name`: Taiwan labels typically print the brand name (`廠牌名稱`, e.g. `八將軍`) above the parenthesized common name (`農藥普通名稱`, e.g. `（殺芬草）` -> value `'殺芬草'`). Extract `common_name` with EXACT printed spelling verbatim (do not translate).
+  - `dosage_and_content` & `formulation_type`: check `含量劑型` (e.g. `70% 水分散性粒劑`). For `formulation_type`, look for the printed **Chinese** formulation type FIRST (e.g. `水分散性粒劑`, `水懸劑`, `懸浮劑`, `乳劑`, `可濕性粉劑`, `粒劑`, `溶液`), extracting its exact printed Chinese text in `verbatim_text` (and canonical code or Chinese text in `value`); fall back to an English formulation code only if no Chinese formulation type is printed. Do NOT extract trade-name suffixes such as `DF` in `克魔力®DF`.
+  - `local_permit_holder_name` & `local_permit_holder_address`: extract from `名稱` / `地址` (許可證持有廠商). Do not confuse with `分裝工廠` (`repackaging_factory_name`/`address`).
+  - `foreign_manufacturer_name` & `foreign_manufacturer_address`: extract from `※ 國外生產工廠` / `國外原製造廠` with EXACT printed spelling verbatim (do not translate or alter abbreviations), separating the company/plant name from the street/city/country address.
+- GHS hazards & emergency contacts (危害標示與急救):
+  - `ghs_pictograms`: visually classify EVERY red-bordered GHS hazard diamond pictogram into `GHS01`-`GHS09` with its individual tight `box_2d`. Ignore the bottom blue/colored FAO PPE/safety icon strip (危害防範圖式).
+  - `signal_word`: extract `危險` or `警告` printed beneath the GHS diamonds.
+  - `iupac_name`: extract from the `有效成分與其他成分之種類及含量` table (`有效成分(IUPAC名稱)`).
+  - `hazard_statements`: extract from `危害警告訊息`. Taiwan labels often list Chinese hazard statements separated by `、` or newlines without H-codes (e.g. `吞食可能有害、對水生生物毒性非常大並具有長期持續影響`); split and capture EVERY statement verbatim.
+  - `emergency_phone`: extract emergency/poison-control phone numbers from `預防中毒及解毒方法` (e.g. 臺北榮總 `(02)28717121`, 高醫 `(07)3162631`) or `儲藏及使用時應注意事項` (company 0800 emergency line). Do NOT extract the permit holder's general office phone or the `0800-085717` waste-container recycling hotline.
+- Usage table & APHIA annotations (使用方法與審查註記):
+  - Extract EVERY row of the `使用方法及其範圍` (`使用方法` / `使用範圍`) table into `crop_usage_table[]` with verbatim `crop_name`, `pest_name`, `dosage_per_ha`, `dilution_ratio`, `application_timing`, `application_count`, `interval_days`, `phi_days`, and `notes` (include `施藥方法` + `注意事項` in `notes` when both columns appear) with tight `box_2d` coordinates.
+  - IMPORTANT: Look carefully for handwritten, drawn, redline, or stamped instructions added by APHIA (防檢署) directly on the label. Capture every single APHIA modification instruction in `aphia_review_annotations`.
 
 {_COMMON_GROUNDING_RULES}""",
     "change_cert": f"""You are a Taiwan agrochemical Regulatory Affairs (RA) specialist reviewing notarized supplier/government certificates (LoA, MoC, Free Sale, LoO, or other).
