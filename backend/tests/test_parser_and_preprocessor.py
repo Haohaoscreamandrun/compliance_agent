@@ -126,6 +126,25 @@ def test_preprocess_msds_extracts_digital_text_blocks_and_skips_image_part_when_
     assert letter_contents[0] == "=== PAGE 1 ==="
     assert not isinstance(letter_contents[1], str)
 
+    # For doc_type='label' and image-bearing 'msds', prepend the official GHS01-GHS09 reference legend
+    label_contents = build_interleaved_contents("label", pages)
+    assert isinstance(label_contents[0], str) and "GHS01-GHS09" in label_contents[0]
+    assert not isinstance(label_contents[1], str)
+    assert label_contents[2] == "=== PAGE 1 ==="
+
+    img_page = ProcessedPage(
+        page_number=1,
+        image_rel_path=pages[0].image_rel_path,
+        webp_bytes=pages[0].webp_bytes,
+        width_px=pages[0].width_px,
+        height_px=pages[0].height_px,
+        text_blocks_text=pages[0].text_blocks_text,
+        has_images=True,
+    )
+    msds_img_contents = build_interleaved_contents("msds", [img_page])
+    assert isinstance(msds_img_contents[0], str) and "GHS01-GHS09" in msds_img_contents[0]
+    assert msds_img_contents[2] == "=== PAGE 1 ==="
+
 
 def test_preprocess_giant_mediabox_pdf_scales_safely_without_oom(tmp_path: Path) -> None:
     # A 14400x14400 pt PDF MediaBox must be scaled to <= 1600px directly during rasterization
