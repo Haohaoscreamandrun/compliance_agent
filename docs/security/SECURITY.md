@@ -42,6 +42,7 @@ Tracks implemented security controls, trust boundaries, and operational requirem
 
 - **Secret Storage:** Runtime secrets (`DATABASE_URL`, `GEMINI_API_KEY`, R2 credentials) live in Cloudflare Worker **Variables and Secrets**; CI/CD uses only `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, and `DATABASE_URL` in GitHub Secrets.
 - **Root npm Audit:** `npm audit --omit=dev` verified `0 vulnerabilities` (Task 11.1).
+- **Frontend npm Audit:** `npm audit --omit=dev` reported 7 advisories in `@angular/* <=19.2.25` (SSR hydration, `HttpTransferCache`, `formatDate`, i18n/two-way attribute binding — non-reachable in this CSR app without SSR/`HttpTransferCache`; fix requires breaking upgrade to Angular 22, deferred).
 
 ---
 

@@ -74,6 +74,18 @@ async def get_cached_audit_report(
             .limit(1)
         )
     ).scalar_one_or_none()
+    if not isinstance(cached, AuditReportCache) and canon_reg == PUBLIC_DEMO_REG_NO and target_company_id != PUBLIC_DEMO_COMPANY_ID:
+        cached = (
+            await session.execute(
+                select(AuditReportCache)
+                .where(
+                    AuditReportCache.company_id == PUBLIC_DEMO_COMPANY_ID,
+                    AuditReportCache.reg_no == canon_reg,
+                )
+                .order_by(AuditReportCache.created_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
     if not isinstance(cached, AuditReportCache):
         raise HTTPException(status_code=404, detail=f"No cached audit report found for '{canon_reg}'.")
     report = ComplianceAuditReport.model_validate(cached.report_json)
