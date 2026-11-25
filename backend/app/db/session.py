@@ -58,9 +58,9 @@ async def init_db_schema(engine: AsyncEngine) -> None:
             )
             await conn.execute(
                 text(
-                    "INSERT INTO companies (company_id, name) VALUES "
-                    "('default', 'Default Workspace'), "
-                    "('public_demo', 'Public Demo') "
+                    "INSERT INTO companies (company_id, name, created_at) VALUES "
+                    "('default', 'Default Workspace', NOW()), "
+                    "('public_demo', 'Public Demo', NOW()) "
                     "ON CONFLICT (company_id) DO NOTHING"
                 )
             )
