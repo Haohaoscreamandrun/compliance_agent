@@ -18,8 +18,20 @@ from pydantic import BaseModel, ValidationError
 from sqlalchemy import exists, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import (
+    CompanyUserContext,
+    get_current_company_user,
+    get_optional_company_user,
+)
 from app.config import Settings
-from app.db.models import VALID_DOC_TYPES, Document, DocumentClause, DocumentPage, MoaRegistry
+from app.db.models import (
+    PUBLIC_DEMO_COMPANY_ID,
+    VALID_DOC_TYPES,
+    Document,
+    DocumentClause,
+    DocumentPage,
+    MoaRegistry,
+)
 from app.db.session import get_db_session
 from app.schemas.extraction import NotarizedCertExtraction, ProductLabelExtraction
 from app.services.cascade_diff import score_matching_cert_product, validate_reg_no
@@ -79,9 +91,10 @@ async def check_document_exists(
     filename: str = Query(..., min_length=1),
     doc_type: DocType = Query(...),
     reg_no: str | None = Query(default=None),
+    user: CompanyUserContext = Depends(get_current_company_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> DocumentExistsResponse:
-    """Check whether a filename already exists for `(filename, doc_type, reg_no)`."""
+    """Check whether a filename already exists for `(company_id, filename, doc_type, reg_no)`."""
     safe_name = Path(filename.replace("\\", "/")).name[:256]
     validated_type = _validate_doc_type(doc_type)
     try:
@@ -92,6 +105,7 @@ async def check_document_exists(
     stmt = (
         select(Document.doc_id)
         .where(
+            Document.company_id == user.company_id,
             Document.filename == safe_name,
             Document.doc_type == validated_type,
             Document.reg_no.is_not_distinct_from(resolved_reg),
@@ -123,6 +137,7 @@ async def upload_document(
         default=False,
         description="When true, bypass content_sha256 cache, re-parse with Gemini, and promote to baseline.",
     ),
+    user: CompanyUserContext = Depends(get_current_company_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> DocumentUploadResponse:
     """In-RAM preprocess -> Gemini constrained extraction -> PostgreSQL JSONB persistence."""
@@ -203,7 +218,7 @@ async def upload_document(
         except (GeminiParseError, genai_errors.APIError) as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-        await asyncio.to_thread(storage.save_pages, doc_id, pages)
+        await asyncio.to_thread(storage.save_pages, doc_id, pages, company_id=user.company_id)
 
         extracted_dict = parse_res.extraction.model_dump()
         extracted_reg_gf = getattr(parse_res.extraction, "reg_no", None)
@@ -258,6 +273,7 @@ async def upload_document(
             await session.execute(
                 select(Document.doc_id)
                 .where(
+                    Document.company_id == user.company_id,
                     Document.filename == safe_filename,
                     Document.doc_type == doc_type,
                     Document.reg_no.is_not_distinct_from(resolved_reg),
@@ -276,6 +292,7 @@ async def upload_document(
                     await session.execute(
                         update(Document)
                         .where(
+                            Document.company_id == user.company_id,
                             Document.reg_no == resolved_reg,
                             Document.doc_type == doc_type,
                             Document.volume_tag == resolved_vol,
@@ -287,6 +304,7 @@ async def upload_document(
                     await session.execute(
                         update(Document)
                         .where(
+                            Document.company_id == user.company_id,
                             Document.filename == safe_filename,
                             Document.doc_type == doc_type,
                             Document.reg_no.is_(None),
@@ -299,6 +317,7 @@ async def upload_document(
 
             doc_row = Document(
                 doc_id=doc_id,
+                company_id=user.company_id,
                 filename=safe_filename,
                 doc_type=doc_type,
                 reg_no=resolved_reg,
@@ -337,7 +356,7 @@ async def upload_document(
             raise
     finally:
         if not committed:
-            await asyncio.to_thread(storage.delete_doc_pages, doc_id)
+            await asyncio.to_thread(storage.delete_doc_pages, doc_id, company_id=user.company_id)
 
     return DocumentUploadResponse(
         doc_id=doc_row.doc_id,
@@ -376,10 +395,15 @@ async def list_documents(
     ),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    user: CompanyUserContext = Depends(get_current_company_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> list[DocumentSummary]:
-    """List uploaded regulatory documents, filtered by permit, doc_type, baseline, common_name, or product code."""
-    stmt = select(Document).order_by(Document.uploaded_at.desc())
+    """List uploaded regulatory documents, filtered by company, permit, doc_type, baseline, common_name, or product code."""
+    stmt = (
+        select(Document)
+        .where(Document.company_id == user.company_id)
+        .order_by(Document.uploaded_at.desc())
+    )
     canon_reg: str | None = None
     if reg_no is not None and reg_no != "":
         try:
@@ -425,7 +449,7 @@ async def list_documents(
         reg_docs = (
             await session.execute(
                 select(Document)
-                .where(Document.reg_no == canon_reg)
+                .where(Document.company_id == user.company_id, Document.reg_no == canon_reg)
                 .order_by(Document.is_active_baseline.desc(), Document.uploaded_at.desc())
                 .limit(100)
             )
@@ -462,7 +486,11 @@ async def list_documents(
         shared_certs = (
             await session.execute(
                 select(Document)
-                .where(Document.doc_type == "change_cert", Document.reg_no.is_(None))
+                .where(
+                    Document.company_id == user.company_id,
+                    Document.doc_type == "change_cert",
+                    Document.reg_no.is_(None),
+                )
                 .order_by(Document.uploaded_at.desc())
                 .limit(50)
             )
@@ -499,15 +527,23 @@ async def list_documents(
 async def set_document_baseline(
     doc_id: str,
     body: BaselineToggleRequest,
+    user: CompanyUserContext = Depends(get_current_company_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> DocumentSummary:
-    """Mark or unmark a document as the active baseline for its `(reg_no, doc_type)`."""
+    """Mark or unmark a document as the active baseline for its `(company_id, reg_no, doc_type)`."""
     try:
         safe_id = validate_doc_id(doc_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    doc = (await session.execute(select(Document).where(Document.doc_id == safe_id))).scalar_one_or_none()
+    doc = (
+        await session.execute(
+            select(Document).where(
+                Document.doc_id == safe_id,
+                Document.company_id == user.company_id,
+            )
+        )
+    ).scalar_one_or_none()
     if doc is None:
         raise HTTPException(status_code=404, detail=f"Document '{safe_id}' not found.")
     if body.is_active_baseline and not doc.reg_no:
@@ -520,6 +556,7 @@ async def set_document_baseline(
         await session.execute(
             update(Document)
             .where(
+                Document.company_id == user.company_id,
                 Document.reg_no == doc.reg_no,
                 Document.doc_type == doc.doc_type,
                 Document.volume_tag == doc.volume_tag,
@@ -549,8 +586,9 @@ async def get_document_page_image(
     doc_id: str,
     page_number: int,
     request: Request,
+    user: CompanyUserContext | None = Depends(get_optional_company_user),
     session: AsyncSession = Depends(get_db_session),
-) -> FileResponse:
+) -> Response:
     """Serve normalized `.webp` page image for `<svg viewBox="0 0 1000 1000">` overlay."""
     try:
         safe_id = validate_doc_id(doc_id)
@@ -559,26 +597,39 @@ async def get_document_page_image(
     if page_number < 1:
         raise HTTPException(status_code=400, detail="page_number must be >= 1.")
 
-    page_row = (
+    row = (
         await session.execute(
-            select(DocumentPage).where(
+            select(Document, DocumentPage)
+            .join(DocumentPage, DocumentPage.doc_id == Document.doc_id)
+            .where(
                 DocumentPage.doc_id == safe_id,
                 DocumentPage.page_number == page_number,
             )
         )
-    ).scalar_one_or_none()
-    if page_row is None:
+    ).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Page {page_number} of '{safe_id}' not found.")
+    doc_row, page_row = row
+
+    is_public_demo = doc_row.company_id == PUBLIC_DEMO_COMPANY_ID
+    if not is_public_demo and (user is None or doc_row.company_id != user.company_id):
         raise HTTPException(status_code=404, detail=f"Page {page_number} of '{safe_id}' not found.")
 
+    cache_control = "public, max-age=86400, immutable" if is_public_demo else "private, max-age=86400"
     storage = PageStorage(request.app.state.settings)
     if storage.uses_r2:
-        data = await asyncio.to_thread(storage.read_page, safe_id, page_row.image_rel_path)
+        data = await asyncio.to_thread(
+            storage.read_page,
+            safe_id,
+            page_row.image_rel_path,
+            company_id=doc_row.company_id,
+        )
         if data is None:
             raise HTTPException(status_code=404, detail="Page image file missing in R2.")
         return Response(
             content=data,
             media_type="image/webp",
-            headers={"Cache-Control": "public, max-age=86400, immutable"},
+            headers={"Cache-Control": cache_control},
         )
 
     storage_root = request.app.state.settings.storage_dir.resolve()
@@ -590,5 +641,5 @@ async def get_document_page_image(
     return FileResponse(
         path=image_path,
         media_type="image/webp",
-        headers={"Cache-Control": "private, max-age=3600, immutable"},
+        headers={"Cache-Control": cache_control},
     )

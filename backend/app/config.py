@@ -75,6 +75,7 @@ class Settings(BaseSettings):
     backend_host: str = Field(default="127.0.0.1")
     backend_port: int = Field(default=8000, ge=1, le=65535)
     frontend_port: int = Field(default=4200, ge=1, le=65535)
+    require_cf_access: bool = Field(default=False)
     cors_allowed_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["http://localhost:4200", "http://127.0.0.1:4200"]
     )

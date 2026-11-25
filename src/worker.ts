@@ -39,6 +39,7 @@ export class ComplianceBackend extends Container<Env> {
     this.envVars = {
       BACKEND_HOST: '0.0.0.0',
       BACKEND_PORT: '8000',
+      REQUIRE_CF_ACCESS: env.REQUIRE_CF_ACCESS ?? 'false',
       GEMINI_API_KEY: env.GEMINI_API_KEY ?? '',
       DATABASE_URL: env.DATABASE_URL ?? '',
       POSTGRES_HOST: env.POSTGRES_HOST ?? '',
@@ -134,24 +135,6 @@ export default {
             { status: 401 },
           ),
         );
-      }
-
-      if (method === 'GET') {
-        const match = PAGE_IMAGE_RE.exec(url.pathname);
-        if (match) {
-          const [, docId, page] = match;
-          const obj = await env.PAGES_BUCKET.get(`pages/${docId}/page_${page}.webp`);
-          if (obj) {
-            return withSecurityHeaders(
-              new Response(obj.body, {
-                headers: {
-                  'content-type': 'image/webp',
-                  'cache-control': 'public, max-age=86400, immutable',
-                },
-              }),
-            );
-          }
-        }
       }
 
       const container = env.COMPLIANCE_BACKEND.getByName('primary');

@@ -47,7 +47,7 @@ Tracks implemented security controls, trust boundaries, and operational requirem
 
 ## 4. Planned Controls (Tasks 11.3–11.7)
 
-- [ ] **Task 11.3:** Enforce `company_id` ownership on `/api/documents*` and R2 `GET /api/documents/{doc_id}/pages/{page}/image` (read-only exception only for `public_demo`).
+- [x] **Task 11.3:** Enforced `company_id` ownership on `/api/documents*` (`deps.py`, `routes_documents.py`), namespaced R2 keys under `companies/{company_id}/pages/{doc_id}/...` with `validate_company_id` (`storage.py`), removed the unauthenticated R2 page-image shortcut in `src/worker.ts`, forwarded `REQUIRE_CF_ACCESS` to `ComplianceBackend`, and set `Cache-Control: private` for company page images (`public` only for `public_demo`).
 - [ ] **Task 11.4:** Scope `/api/copilot*`, `/api/entity-aliases*`, and `chemical_evaluations` by `company_id`.
 - [ ] **Task 11.6:** Enforce `role == 'admin'` on `GET /api/admin/access-requests` and `POST /api/admin/company-users`.
 - [ ] **Task 11.7:** Add Cloudflare Workers `ratelimits` binding keyed by verified email on Gemini `POST` routes.
