@@ -182,3 +182,28 @@ export function prepareContainerRequest(
   }
   return new Request(request, { headers });
 }
+
+export interface RateLimiterBinding {
+  limit(options: { key: string }): Promise<{ success: boolean }>;
+}
+
+export function isGeminiPostRoute(method: string, pathname: string): boolean {
+  if (method.toUpperCase() !== 'POST') {
+    return false;
+  }
+  return pathname === '/api/documents/upload' || pathname.startsWith('/api/copilot/audit/');
+}
+
+export async function checkGeminiRateLimit(
+  request: Request,
+  limiter: RateLimiterBinding | undefined,
+  identity: VerifiedAccessIdentity | null,
+): Promise<boolean> {
+  if (!limiter) {
+    return true;
+  }
+  const clientIp = request.headers.get('cf-connecting-ip')?.trim() || 'anonymous';
+  const key = identity?.email ?? `ip:${clientIp}`;
+  const { success } = await limiter.limit({ key });
+  return success;
+}

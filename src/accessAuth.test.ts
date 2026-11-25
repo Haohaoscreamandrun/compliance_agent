@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  checkGeminiRateLimit,
   clearJwksCacheForTests,
+  isGeminiPostRoute,
   prepareContainerRequest,
   verifyCloudflareAccessJwt,
 } from './accessAuth.ts';
@@ -143,4 +145,41 @@ test('prepareContainerRequest strips spoofed X-Auth-User-Email and injects verif
 
   const verified = prepareContainerRequest(incoming.clone(), { email: 'real@company.com', sub: 'u1' });
   assert.equal(verified.headers.get('x-auth-user-email'), 'real@company.com');
+});
+
+test('isGeminiPostRoute matches only Gemini-backed POST routes', () => {
+  assert.equal(isGeminiPostRoute('POST', '/api/documents/upload'), true);
+  assert.equal(isGeminiPostRoute('POST', '/api/copilot/audit/123'), true);
+  assert.equal(isGeminiPostRoute('POST', '/api/copilot/audit/doc-1/chat'), true);
+  assert.equal(isGeminiPostRoute('GET', '/api/documents/upload'), false);
+  assert.equal(isGeminiPostRoute('GET', '/api/copilot/audit/123'), false);
+  assert.equal(isGeminiPostRoute('POST', '/api/access-requests'), false);
+  assert.equal(isGeminiPostRoute('POST', '/api/admin/company-users'), false);
+});
+
+test('checkGeminiRateLimit keys by verified email and blocks when limiter rejects', async () => {
+  const seenKeys: string[] = [];
+  const allowingLimiter = {
+    async limit({ key }: { key: string }) {
+      seenKeys.push(key);
+      return { success: true };
+    },
+  };
+  const blockingLimiter = {
+    async limit({ key }: { key: string }) {
+      seenKeys.push(key);
+      return { success: false };
+    },
+  };
+
+  const req = new Request('https://example.com/api/documents/upload', {
+    method: 'POST',
+    headers: { 'cf-connecting-ip': '203.0.113.5' },
+  });
+
+  assert.equal(await checkGeminiRateLimit(req, undefined, { email: 'alice@example.com' }), true);
+  assert.equal(await checkGeminiRateLimit(req, allowingLimiter, { email: 'alice@example.com' }), true);
+  assert.equal(await checkGeminiRateLimit(req, blockingLimiter, { email: 'alice@example.com' }), false);
+  assert.equal(await checkGeminiRateLimit(req, allowingLimiter, null), true);
+  assert.deepEqual(seenKeys, ['alice@example.com', 'alice@example.com', 'ip:203.0.113.5']);
 });

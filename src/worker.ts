@@ -1,5 +1,7 @@
 import { Container } from '@cloudflare/containers';
 import {
+  checkGeminiRateLimit,
+  isGeminiPostRoute,
   prepareContainerRequest,
   VerifiedAccessIdentity,
   verifyCloudflareAccessJwt,
@@ -14,6 +16,7 @@ export interface Env {
   CF_ACCESS_TEAM_DOMAIN?: string;
   CF_ACCESS_AUD?: string;
   GEMINI_API_KEY?: string;
+  GEMINI_RATE_LIMITER?: RateLimit;
   DATABASE_URL?: string;
   POSTGRES_HOST?: string;
   POSTGRES_PORT?: string;
@@ -133,6 +136,18 @@ export default {
           Response.json(
             { detail: 'Write access requires authentication (X-Write-Token or Zero Trust Access).' },
             { status: 401 },
+          ),
+        );
+      }
+
+      if (
+        isGeminiPostRoute(method, url.pathname) &&
+        !(await checkGeminiRateLimit(request, env.GEMINI_RATE_LIMITER, verifiedIdentity))
+      ) {
+        return withSecurityHeaders(
+          Response.json(
+            { detail: 'Rate limit exceeded for Gemini requests. Please retry shortly.' },
+            { status: 429, headers: { 'Retry-After': '60' } },
           ),
         );
       }

@@ -79,7 +79,7 @@ See detailed design in [`tasks/plan.md`](plan.md).
 - [x] **Checkpoint 2 (Tasks 11.3–11.4):** Cross-company isolation tests prove Company A users share data while Company B cannot read/modify/delete Company A's documents, aliases, or audits.
 - [x] **Task 11.5 (`feat(ui-identity)`):** Add `GET /api/me` and `POST /api/access-requests`, show active user email + company badge in Angular top bar, add **"Try Demo Audit"** (`農藥進99001`) button, and add **"Join Company"** application dialog for un-allowlisted users. *(M: `routes_identity.py`, `compliance-api.service.ts`, `app.component.*`, `join-company-dialog.component.ts`)*
 - [x] **Task 11.6 (`feat(admin-onboarding)`):** Add `POST /api/access-requests` plus admin-only (`role == 'admin'`) `GET /api/admin/access-requests` and `POST /api/admin/company-users` to assign/approve a user into a company. *(S: `routes_identity.py`, `test_identity_routes.py`)*
-- [ ] **Task 11.7 (`feat(rate-limit)`):** Add Cloudflare Workers `ratelimits` binding in `wrangler.jsonc` keyed by verified email on Gemini `POST` routes in `src/worker.ts`. *(S: `wrangler.jsonc`, `src/worker.ts`)*
+- [x] **Task 11.7 (`feat(rate-limit)`):** Add Cloudflare Workers `ratelimits` binding in `wrangler.jsonc` keyed by verified email on Gemini `POST` routes in `src/worker.ts`. *(S: `wrangler.jsonc`, `src/worker.ts`)*
 - [ ] **Checkpoint / PR #11:** Review & merge `develop` → `main` for Component 11.
 
 ## Future Enhancements (Post-MVP)
