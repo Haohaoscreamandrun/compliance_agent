@@ -71,7 +71,7 @@
 
 See detailed design in [`tasks/plan.md`](plan.md).
 
-- [ ] **Task 11.1 (`feat(edge-auth)`):** Verify `Cf-Access-Jwt-Assertion` (JWKS + `aud`) in `src/worker.ts`, strip client-spoofed `X-Auth-User-Email`, and forward verified email to `ComplianceBackend`. *(S: `src/worker.ts`, `src/accessAuth.ts`, `src/accessAuth.test.ts`)*
+- [x] **Task 11.1 (`feat(edge-auth)`):** Verify `Cf-Access-Jwt-Assertion` (JWKS + `aud`) in `src/worker.ts`, strip client-spoofed `X-Auth-User-Email`, and forward verified email to `ComplianceBackend`. *(S: `src/worker.ts`, `src/accessAuth.ts`, `src/accessAuth.test.ts`)*
 - [ ] **Task 11.2 (`feat(db-tenancy)`):** Add `companies`, `company_users` (explicit allowlist), & `company_access_requests` and Alembic migration `003` adding `company_id` (backfilled to `default` / `public_demo`) + scoped unique constraints on `documents`, `entity_aliases`, `audit_reports`, and `chemical_evaluations`. *(M: `backend/app/db/models.py`, `backend/alembic/versions/003_*.py`, `backend/app/db/session.py`)*
 - [ ] **Checkpoint 1 (Tasks 11.1–11.2):** `node --test`, `tsc -p tsconfig.worker.json`, `alembic upgrade head`, and `pytest -q` pass.
 - [ ] **Task 11.3 (`feat(api-tenancy-docs)`):** Add FastAPI `get_current_company_user` dependency (explicit `company_users` allowlist), scope `/api/documents*` & R2 keys (`companies/{company_id}/pages/{doc_id}/...`) by `company_id`, and enforce tenant ownership on page-image fetches (allowing `public_demo` read-only). *(M: `backend/app/api/deps.py`, `routes_documents.py`, `storage.py`, `src/worker.ts`, tests)*
