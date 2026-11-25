@@ -60,3 +60,64 @@ async def test_me_and_access_request_flow(tmp_path: Path) -> None:
         assert r_req.status_code == 201
         assert r_req.json()["email"] == "new@gmail.com"
         assert r_req.json()["status"] == "pending"
+
+
+async def test_admin_onboarding_requires_admin_and_assigns_company(tmp_path: Path) -> None:
+    app = create_app(
+        Settings(_env_file=None, storage_dir=tmp_path, require_cf_access=True),
+        init_db=False,
+    )
+    session = AsyncMock()
+    session.add = MagicMock()
+    app.dependency_overrides[get_db_session] = lambda: session
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. Member role -> 403 on admin endpoints
+        member = CompanyUser(email="alice@compa.com", company_id="comp_a", role="member")
+        session.execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=member))
+        assert (
+            await client.get("/api/admin/access-requests", headers={"x-auth-user-email": "alice@compa.com"})
+        ).status_code == 403
+        assert (
+            await client.post(
+                "/api/admin/company-users",
+                json={"email": "new@gmail.com", "company_id": "comp_a"},
+                headers={"x-auth-user-email": "alice@compa.com"},
+            )
+        ).status_code == 403
+
+        # 2. Admin cannot assign to public_demo -> 400
+        admin = CompanyUser(email="admin@compa.com", company_id="default", role="admin")
+        session.execute.side_effect = [
+            MagicMock(scalar_one_or_none=MagicMock(return_value=admin)),
+        ]
+        assert (
+            await client.post(
+                "/api/admin/company-users",
+                json={"email": "new@gmail.com", "company_id": "public_demo"},
+                headers={"x-auth-user-email": "admin@compa.com"},
+            )
+        ).status_code == 400
+
+        # 3. Admin assigns user to comp_acme -> 200 and updates pending requests
+        session.execute.side_effect = [
+            MagicMock(scalar_one_or_none=MagicMock(return_value=admin)),
+            MagicMock(),  # upsert Company
+            MagicMock(),  # upsert CompanyUser
+            MagicMock(),  # update CompanyAccessRequest
+        ]
+        ok = await client.post(
+            "/api/admin/company-users",
+            json={
+                "email": "New@Gmail.com",
+                "company_id": "comp_acme",
+                "company_name": "Acme AgroChem",
+                "role": "member",
+            },
+            headers={"x-auth-user-email": "admin@compa.com"},
+        )
+        assert ok.status_code == 200
+        assert ok.json()["email"] == "new@gmail.com"
+        assert ok.json()["company_id"] == "comp_acme"
+        session.commit.assert_awaited()

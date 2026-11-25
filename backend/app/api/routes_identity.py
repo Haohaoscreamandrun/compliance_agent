@@ -3,19 +3,29 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import select
+from sqlalchemy import select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
     CompanyUserContext,
     get_optional_company_user,
     get_verified_email,
+    require_admin_user,
 )
-from app.db.models import Company, CompanyAccessRequest
+from app.db.models import (
+    PUBLIC_DEMO_COMPANY_ID,
+    Company,
+    CompanyAccessRequest,
+    CompanyUser,
+    _utc_now,
+)
 from app.db.session import get_db_session
+from app.services.storage import validate_company_id
 
 router = APIRouter(prefix="/api", tags=["identity"])
 
@@ -156,4 +166,106 @@ async def create_access_request(
         status=row.status,
         assigned_company_id=row.assigned_company_id,
         created_at=row.created_at,
+    )
+
+
+class CompanyUserAssignRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=256)
+    company_id: str = Field(..., min_length=1, max_length=63)
+    company_name: str | None = Field(default=None, max_length=128)
+    role: Literal["member", "admin"] = "member"
+
+    @field_validator("email")
+    @classmethod
+    def _normalize_email(cls, value: str) -> str:
+        cleaned = value.strip().lower()
+        if "@" not in cleaned or "." not in cleaned.split("@", 1)[-1]:
+            raise ValueError("Invalid email address.")
+        return cleaned
+
+    @field_validator("company_id")
+    @classmethod
+    def _valid_company_id(cls, value: str) -> str:
+        return validate_company_id(value)
+
+
+class CompanyUserOut(BaseModel):
+    email: str
+    company_id: str
+    company_name: str
+    role: str
+
+
+@router.get("/admin/access-requests", response_model=list[AccessRequestOut])
+async def list_access_requests(
+    status: Literal["pending", "approved", "rejected"] | None = Query(default="pending"),
+    limit: int = Query(default=50, ge=1, le=200),
+    _admin: CompanyUserContext = Depends(require_admin_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> list[AccessRequestOut]:
+    """List company join applications (admin only)."""
+    stmt = select(CompanyAccessRequest).order_by(CompanyAccessRequest.created_at.desc()).limit(limit)
+    if status is not None:
+        stmt = stmt.where(CompanyAccessRequest.status == status)
+    rows = (await session.execute(stmt)).scalars().all()
+    return [
+        AccessRequestOut(
+            id=r.id,
+            email=r.email,
+            requested_company_name=r.requested_company_name,
+            note=r.note,
+            status=r.status,
+            assigned_company_id=r.assigned_company_id,
+            created_at=r.created_at,
+        )
+        for r in rows
+    ]
+
+
+@router.post("/admin/company-users", response_model=CompanyUserOut)
+async def assign_company_user(
+    body: CompanyUserAssignRequest,
+    admin: CompanyUserContext = Depends(require_admin_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> CompanyUserOut:
+    """Assign or reassign a user email to a company and approve any pending access request."""
+    if body.company_id == PUBLIC_DEMO_COMPANY_ID:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot assign users to reserved '{PUBLIC_DEMO_COMPANY_ID}' company.",
+        )
+
+    resolved_name = (body.company_name or "").strip() or body.company_id
+    await session.execute(
+        pg_insert(Company)
+        .values(company_id=body.company_id, name=resolved_name)
+        .on_conflict_do_nothing(index_elements=["company_id"])
+    )
+    await session.execute(
+        pg_insert(CompanyUser)
+        .values(email=body.email, company_id=body.company_id, role=body.role)
+        .on_conflict_do_update(
+            index_elements=["email"],
+            set_={"company_id": body.company_id, "role": body.role},
+        )
+    )
+    await session.execute(
+        update(CompanyAccessRequest)
+        .where(
+            CompanyAccessRequest.email == body.email,
+            CompanyAccessRequest.status == "pending",
+        )
+        .values(
+            status="approved",
+            assigned_company_id=body.company_id,
+            reviewed_by=admin.email,
+            reviewed_at=_utc_now(),
+        )
+    )
+    await session.commit()
+    return CompanyUserOut(
+        email=body.email,
+        company_id=body.company_id,
+        company_name=resolved_name,
+        role=body.role,
     )

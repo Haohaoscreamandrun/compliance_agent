@@ -49,5 +49,5 @@ Tracks implemented security controls, trust boundaries, and operational requirem
 
 - [x] **Task 11.3:** Enforced `company_id` ownership on `/api/documents*` (`deps.py`, `routes_documents.py`), namespaced R2 keys under `companies/{company_id}/pages/{doc_id}/...` with `validate_company_id` (`storage.py`), removed the unauthenticated R2 page-image shortcut in `src/worker.ts`, forwarded `REQUIRE_CF_ACCESS` to `ComplianceBackend`, and set `Cache-Control: private` for company page images (`public` only for `public_demo`).
 - [x] **Task 11.4:** Scoped `/api/copilot/*` (`CopilotToolset`, `_compute_audit_cache_key`, `AuditReportCache`), `/api/entity-aliases`, and `ChemicalEvaluation` (`(company_id, common_name)`) to `company_id`; `GET /api/copilot/audit/{reg_no}` allows unauthenticated reads **only** for `PUBLIC_DEMO_REG_NO` (`農藥進99001`, `company_id='public_demo'`).
-- [ ] **Task 11.6:** Enforce `role == 'admin'` on `GET /api/admin/access-requests` and `POST /api/admin/company-users`.
+- [x] **Task 11.6:** Enforced `role == 'admin'` (`require_admin_user`) on `GET /api/admin/access-requests` and `POST /api/admin/company-users`, with email normalization, `validate_company_id`, and a guard blocking assignment into `public_demo`.
 - [ ] **Task 11.7:** Add Cloudflare Workers `ratelimits` binding keyed by verified email on Gemini `POST` routes.
