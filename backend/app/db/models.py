@@ -27,10 +27,89 @@ def _utc_now() -> datetime:
 
 
 VALID_DOC_TYPES = ("label", "msds", "change_cert", "official_letter")
+DEFAULT_COMPANY_ID = "default"
+PUBLIC_DEMO_COMPANY_ID = "public_demo"
 
 
 class Base(DeclarativeBase):
     """Declarative base for all Compliance Agent PostgreSQL tables."""
+
+
+class Company(Base):
+    """Tenant organization sharing documents, baselines, entity aliases, and audit caches."""
+
+    __tablename__ = "companies"
+    __table_args__ = (
+        CheckConstraint(
+            "company_id NOT LIKE '%/%' AND company_id NOT LIKE '%\\\\%' AND company_id NOT LIKE '%..%'",
+            name="ck_company_id_safe_path",
+        ),
+    )
+
+    company_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utc_now
+    )
+
+
+class CompanyUser(Base):
+    """Explicit allowlist mapping a verified user email to a single company."""
+
+    __tablename__ = "company_users"
+    __table_args__ = (
+        CheckConstraint("role IN ('member', 'admin')", name="ck_company_user_role"),
+        CheckConstraint("email = lower(email)", name="ck_company_user_email_lower"),
+    )
+
+    email: Mapped[str] = mapped_column(String(256), primary_key=True)
+    company_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("companies.company_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    role: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="member", server_default="member"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utc_now
+    )
+
+
+class CompanyAccessRequest(Base):
+    """Application submitted by an authenticated user requesting access to a company."""
+
+    __tablename__ = "company_access_requests"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'approved', 'rejected')",
+            name="ck_access_request_status",
+        ),
+        CheckConstraint("email = lower(email)", name="ck_access_request_email_lower"),
+        Index(
+            "uq_access_requests_pending_email",
+            "email",
+            unique=True,
+            postgresql_where=text("status = 'pending'"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(256), nullable=False, index=True)
+    requested_company_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    note: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="pending", server_default="pending"
+    )
+    assigned_company_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("companies.company_id", ondelete="SET NULL")
+    )
+    reviewed_by: Mapped[str | None] = mapped_column(String(256))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utc_now
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class MoaRegistry(Base):
@@ -83,9 +162,16 @@ class Document(Base):
             name="ck_doc_type",
         ),
         CheckConstraint("page_count >= 1", name="ck_page_count"),
-        Index("ix_documents_baseline_lookup", "reg_no", "doc_type", "is_active_baseline"),
+        Index(
+            "ix_documents_baseline_lookup",
+            "company_id",
+            "reg_no",
+            "doc_type",
+            "is_active_baseline",
+        ),
         Index(
             "uq_documents_active_baseline",
+            "company_id",
             "reg_no",
             "doc_type",
             "volume_tag",
@@ -95,6 +181,14 @@ class Document(Base):
     )
 
     doc_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    company_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("companies.company_id", ondelete="CASCADE"),
+        nullable=False,
+        default=DEFAULT_COMPANY_ID,
+        server_default=DEFAULT_COMPANY_ID,
+        index=True,
+    )
     filename: Mapped[str] = mapped_column(String(256), nullable=False)
     doc_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     reg_no: Mapped[str | None] = mapped_column(String(32), index=True)
@@ -188,10 +282,18 @@ class EntityAlias(Base):
 
     __tablename__ = "entity_aliases"
     __table_args__ = (
-        UniqueConstraint("zh_name", "en_name", name="uq_entity_alias_pair"),
+        UniqueConstraint("company_id", "zh_name", "en_name", name="uq_entity_alias_pair"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    company_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("companies.company_id", ondelete="CASCADE"),
+        nullable=False,
+        default=DEFAULT_COMPANY_ID,
+        server_default=DEFAULT_COMPANY_ID,
+        index=True,
+    )
     zh_name: Mapped[str] = mapped_column(String(256), nullable=False, index=True)
     en_name: Mapped[str] = mapped_column(String(256), nullable=False, index=True)
     confirmed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -201,11 +303,19 @@ class EntityAlias(Base):
 
 
 class AuditReportCache(Base):
-    """Cached ComplianceAuditReport keyed by reg_no + participating document/MOA/alias fingerprint."""
+    """Cached ComplianceAuditReport keyed by company_id + reg_no + participating fingerprint."""
 
     __tablename__ = "audit_reports"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    company_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("companies.company_id", ondelete="CASCADE"),
+        nullable=False,
+        default=DEFAULT_COMPANY_ID,
+        server_default=DEFAULT_COMPANY_ID,
+        index=True,
+    )
     reg_no: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     cache_key: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
     report_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
@@ -249,10 +359,17 @@ class AphiaQueryCache(Base):
 
 
 class ChemicalEvaluation(Base):
-    """User-submitted 15-year evaluation report delivery date keyed by chemical common name."""
+    """User-submitted 15-year evaluation report delivery date keyed by company and chemical common name."""
 
     __tablename__ = "chemical_evaluations"
 
+    company_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("companies.company_id", ondelete="CASCADE"),
+        primary_key=True,
+        default=DEFAULT_COMPANY_ID,
+        server_default=DEFAULT_COMPANY_ID,
+    )
     common_name: Mapped[str] = mapped_column(String(256), primary_key=True)
     submitted_date: Mapped[str] = mapped_column(String(32), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text)
