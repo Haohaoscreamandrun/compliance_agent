@@ -24,8 +24,20 @@ describe('AppComponent', () => {
     httpMock.verify();
   });
 
+  function flushInitMe(): void {
+    httpMock.expectOne('/api/me').flush({
+      authenticated: true,
+      email: 'local@localhost',
+      company_id: 'default',
+      company_name: 'Default Workspace',
+      role: 'admin',
+      pending_request: null,
+    });
+  }
+
   it('loads all documents and aliases on init with sidenav closed', () => {
     fixture.detectChanges();
+    flushInitMe();
     expect(component.sidenavOpen()).toBeFalse();
 
     const docReq = httpMock.expectOne('/api/documents?limit=50');
@@ -80,6 +92,7 @@ describe('AppComponent', () => {
 
   it('toggles theme cleanly and cleans up backdrop on destroy', () => {
     fixture.detectChanges();
+    flushInitMe();
     httpMock.expectOne('/api/documents?limit=50').flush([]);
     httpMock.expectOne('/api/entity-aliases').flush([]);
 
@@ -94,6 +107,7 @@ describe('AppComponent', () => {
 
   it('loads APHIA details after MOA lookup without blocking on APHIA error', () => {
     fixture.detectChanges();
+    flushInitMe();
     httpMock.expectOne('/api/documents?limit=50').flush([]);
     httpMock.expectOne('/api/entity-aliases').flush([]);
 
@@ -126,6 +140,7 @@ describe('AppComponent', () => {
 
   it('loadBaselines fetches MOA and active baseline docs and reveals audit trigger', () => {
     fixture.detectChanges();
+    flushInitMe();
     httpMock.expectOne('/api/documents?limit=50').flush([]);
     httpMock.expectOne('/api/entity-aliases').flush([]);
 
@@ -188,6 +203,7 @@ describe('AppComponent', () => {
 
   it('formats 422 array errors safely in runAudit', () => {
     fixture.detectChanges();
+    flushInitMe();
     httpMock.expectOne('/api/documents?limit=50').flush([]);
     httpMock.expectOne('/api/entity-aliases').flush([]);
 
@@ -195,5 +211,35 @@ describe('AppComponent', () => {
     const auditReq = httpMock.expectOne('/api/copilot/audit/%E8%BE%B2%E8%97%A5%E9%80%B200569');
     auditReq.flush({ detail: [{ msg: 'Invalid reg_no' }] }, { status: 422, statusText: 'Unprocessable' });
     expect(component.auditError()).toBe('Invalid reg_no');
+  });
+
+  it('skips private loads for un-allowlisted users and supports tryDemoAudit', () => {
+    fixture.detectChanges();
+    httpMock.expectOne('/api/me').flush({
+      authenticated: true,
+      email: 'new@gmail.com',
+      company_id: null,
+      company_name: null,
+      role: null,
+      pending_request: null,
+    });
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('申請加入公司');
+
+    component.tryDemoAudit();
+    httpMock.expectOne('/api/registry/%E8%BE%B2%E8%97%A5%E9%80%B299001').flush(null, {
+      status: 404,
+      statusText: 'Not Found',
+    });
+    httpMock.expectOne('/api/copilot/audit/%E8%BE%B2%E8%97%A5%E9%80%B299001').flush({
+      reg_no: '農藥進99001',
+      product_name_zh: '示範殺菌劑',
+      product_name_en: 'DEMOFUNGIN',
+      overall_status: 'compliant',
+      executive_summary_zh: 'demo',
+      executive_summary_en: 'demo',
+      checklist_items: [],
+    });
+    expect(component.auditReport()?.reg_no).toBe('農藥進99001');
   });
 });
