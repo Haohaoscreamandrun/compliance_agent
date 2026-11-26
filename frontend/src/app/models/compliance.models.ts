@@ -127,3 +127,29 @@ export interface EvaluationSubmissionResponse {
   notes: string | null;
   updated_at: string;
 }
+
+export interface PendingAccessRequest {
+  id: number;
+  requested_company_name: string;
+  status: string;
+  created_at: string;
+}
+
+export interface MeResponse {
+  authenticated: boolean;
+  email: string | null;
+  company_id: string | null;
+  company_name: string | null;
+  role: string | null;
+  pending_request: PendingAccessRequest | null;
+}
+
+export interface AccessRequestOut {
+  id: number;
+  email: string;
+  requested_company_name: string;
+  note: string | null;
+  status: string;
+  assigned_company_id: string | null;
+  created_at: string;
+}

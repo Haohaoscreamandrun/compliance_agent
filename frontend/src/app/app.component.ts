@@ -33,10 +33,15 @@ import {
   EntityAliasDialogData,
 } from './components/entity-alias-dialog/entity-alias-dialog.component';
 import {
+  JoinCompanyDialogComponent,
+  JoinCompanyDialogData,
+} from './components/join-company-dialog/join-company-dialog.component';
+import {
   UploadDialogComponent,
   UploadDialogData,
 } from './components/upload-dialog/upload-dialog.component';
 import {
+  AccessRequestOut,
   AphiaLookupResponse,
   CitationRef,
   ComplianceAuditReport,
@@ -44,6 +49,7 @@ import {
   DocumentSummary,
   DocumentUploadResponse,
   EntityAlias,
+  MeResponse,
   RegistryLookupResponse,
 } from './models/compliance.models';
 import { ComplianceApiService, extractApiErrorMessage } from './services/compliance-api.service';
@@ -95,8 +101,9 @@ export class AppComponent implements OnInit {
     });
   }
 
-  // Theme state (light default, persisted in localStorage)
+  // Theme & Identity state
   readonly theme = signal<'light' | 'dark'>(this.readInitialTheme());
+  readonly me = signal<MeResponse | null>(null);
 
   // Permit, MOA & Pulled Baselines state
   readonly regNo = signal('農藥進00569');
@@ -154,8 +161,78 @@ export class AppComponent implements OnInit {
   });
 
   ngOnInit(): void {
-    this.loadDocuments();
-    this.loadEntityAliases();
+    this.loadMe();
+  }
+
+  loadMe(): void {
+    this.api
+      .getMe()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (info) => {
+          this.me.set(info);
+          if (info.company_id) {
+            this.loadDocuments();
+            this.loadEntityAliases();
+          }
+        },
+        error: () => {
+          this.me.set(null);
+        },
+      });
+  }
+
+  tryDemoAudit(): void {
+    const demoReg = '農藥進99001';
+    this.regNo.set(demoReg);
+    this.auditLoading.set(true);
+    this.auditError.set(null);
+    this.baselinesLoaded.set(false);
+    this.api
+      .lookupRegistry(demoReg)
+      .pipe(
+        catchError(() => of(null)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((moa) => {
+        if (moa) this.moaSnapshot.set(moa);
+      });
+    this.api
+      .getCachedAuditReport(demoReg)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (report) => {
+          this.auditReport.set(report);
+          this.auditLoading.set(false);
+        },
+        error: (err) => {
+          this.auditError.set(extractApiErrorMessage(err, '載入公開示範審查失敗'));
+          this.auditLoading.set(false);
+        },
+      });
+  }
+
+  openJoinCompanyDialog(): void {
+    const email = this.me()?.email;
+    if (!email) return;
+    const ref = this.dialog.open<JoinCompanyDialogComponent, JoinCompanyDialogData, AccessRequestOut | undefined>(
+      JoinCompanyDialogComponent,
+      {
+        data: { email },
+        width: '460px',
+        maxWidth: '94vw',
+      },
+    );
+    ref
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((created) => {
+        if (!created) return;
+        this.snackBar.open(`已送出加入「${created.requested_company_name}」申請`, '關閉', {
+          duration: 4500,
+        });
+        this.loadMe();
+      });
   }
 
   loadDocuments(): void {

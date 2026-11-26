@@ -36,5 +36,15 @@
       "tag": "v1",
       "new_sqlite_classes": ["ComplianceBackend"]
     }
+  ],
+  "ratelimits": [
+    {
+      "name": "GEMINI_RATE_LIMITER",
+      "namespace_id": "1001",
+      "simple": {
+        "limit": 10,
+        "period": 60
+      }
+    }
   ]
 }

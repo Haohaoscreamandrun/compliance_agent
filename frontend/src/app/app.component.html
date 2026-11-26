@@ -8,6 +8,14 @@
       </svg>
       <span class="brand-title">農藥標示合規審查系統</span>
       <small lang="en" class="brand-sub">Compliance Copilot</small>
+      @if (me(); as userInfo) {
+        @if (userInfo.email) {
+          <span class="identity-pill">
+            <span class="mono">{{ userInfo.email }}</span>
+            <span>· {{ userInfo.company_name || '未指派公司' }}</span>
+          </span>
+        }
+      }
     </span>
     <button
       type="button"
@@ -45,6 +53,19 @@
     <button mat-flat-button type="button" [disabled]="baselinesLoading()" (click)="loadBaselines()">
       {{ baselinesLoading() ? '載入中…' : '載入基準文件' }}
     </button>
+    <button mat-stroked-button type="button" (click)="tryDemoAudit()">試用範例</button>
+    @if (me(); as userInfo) {
+      @if (userInfo.authenticated && !userInfo.company_id) {
+        <button
+          mat-stroked-button
+          type="button"
+          [disabled]="!!userInfo.pending_request"
+          (click)="openJoinCompanyDialog()"
+        >
+          {{ userInfo.pending_request ? '申請審核中' : '申請加入公司' }}
+        </button>
+      }
+    }
     <button mat-stroked-button type="button" (click)="openUploadModal()">上傳文件</button>
     <button
       mat-stroked-button

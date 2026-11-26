@@ -141,6 +141,9 @@ def test_cors_origins_env_loading_json_and_csv(monkeypatch: pytest.MonkeyPatch) 
 def test_postgresql_jsonb_ddl_and_cascade_constraints() -> None:
     dialect = postgresql.dialect()
     expected_tables = {
+        "companies",
+        "company_users",
+        "company_access_requests",
         "moa_registry",
         "documents",
         "document_pages",
@@ -195,3 +198,54 @@ async def test_session_builder_and_fastapi_dependency() -> None:
     assert session is not None
     await gen.aclose()
     await engine.dispose()
+
+
+def test_company_tenancy_models_and_alembic_003() -> None:
+    from app.db.models import (
+        AuditReportCache,
+        ChemicalEvaluation,
+        Company,
+        CompanyAccessRequest,
+        CompanyUser,
+        EntityAlias,
+    )
+
+    dialect = postgresql.dialect()
+    for table in (
+        Company.__table__,
+        CompanyUser.__table__,
+        CompanyAccessRequest.__table__,
+    ):
+        ddl = str(CreateTable(table).compile(dialect=dialect))
+        assert "CREATE TABLE" in ddl
+
+    assert "ck_company_id_safe_path" in str(CreateTable(Company.__table__).compile(dialect=dialect))
+    assert "ck_company_user_email_lower" in str(CreateTable(CompanyUser.__table__).compile(dialect=dialect))
+    assert "ck_access_request_email_lower" in str(
+        CreateTable(CompanyAccessRequest.__table__).compile(dialect=dialect)
+    )
+    assert any(i.name == "uq_access_requests_pending_email" for i in CompanyAccessRequest.__table__.indexes)
+
+    doc_cols = set(Document.__table__.columns.keys())
+    alias_cols = set(EntityAlias.__table__.columns.keys())
+    audit_cols = set(AuditReportCache.__table__.columns.keys())
+    eval_pk = [c.name for c in ChemicalEvaluation.__table__.primary_key.columns]
+
+    assert "company_id" in doc_cols
+    assert "company_id" in alias_cols
+    assert "company_id" in audit_cols
+    assert eval_pk == ["company_id", "common_name"]
+
+    uq_baseline = next(i for i in Document.__table__.indexes if i.name == "uq_documents_active_baseline")
+    assert [c.name for c in uq_baseline.columns] == ["company_id", "reg_no", "doc_type", "volume_tag"]
+
+    uq_alias = next(c for c in EntityAlias.__table__.constraints if c.name == "uq_entity_alias_pair")
+    assert [c.name for c in uq_alias.columns] == ["company_id", "zh_name", "en_name"]
+
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    cfg = Config(str(REPO_ROOT / "backend" / "alembic.ini"))
+    cfg.set_main_option("script_location", str(REPO_ROOT / "backend" / "alembic"))
+    script = ScriptDirectory.from_config(cfg)
+    assert script.get_current_head() == "003_company_tenancy"

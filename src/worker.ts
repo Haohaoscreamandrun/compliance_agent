@@ -1,4 +1,11 @@
 import { Container } from '@cloudflare/containers';
+import {
+  checkGeminiRateLimit,
+  isGeminiPostRoute,
+  prepareContainerRequest,
+  VerifiedAccessIdentity,
+  verifyCloudflareAccessJwt,
+} from './accessAuth';
 
 export interface Env {
   ASSETS: Fetcher;
@@ -6,7 +13,10 @@ export interface Env {
   COMPLIANCE_BACKEND: DurableObjectNamespace<ComplianceBackend>;
   WRITE_ACCESS_TOKEN?: string;
   REQUIRE_CF_ACCESS?: string;
+  CF_ACCESS_TEAM_DOMAIN?: string;
+  CF_ACCESS_AUD?: string;
   GEMINI_API_KEY?: string;
+  GEMINI_RATE_LIMITER?: RateLimit;
   DATABASE_URL?: string;
   POSTGRES_HOST?: string;
   POSTGRES_PORT?: string;
@@ -32,6 +42,7 @@ export class ComplianceBackend extends Container<Env> {
     this.envVars = {
       BACKEND_HOST: '0.0.0.0',
       BACKEND_PORT: '8000',
+      REQUIRE_CF_ACCESS: env.REQUIRE_CF_ACCESS ?? 'false',
       GEMINI_API_KEY: env.GEMINI_API_KEY ?? '',
       DATABASE_URL: env.DATABASE_URL ?? '',
       POSTGRES_HOST: env.POSTGRES_HOST ?? '',
@@ -63,7 +74,26 @@ async function constantTimeEqual(a: string, b: string): Promise<boolean> {
   return diff === 0;
 }
 
-async function isAuthorizedWrite(request: Request, env: Env): Promise<boolean> {
+async function resolveVerifiedIdentity(
+  request: Request,
+  env: Env,
+): Promise<VerifiedAccessIdentity | null> {
+  if (env.REQUIRE_CF_ACCESS !== 'true') {
+    return null;
+  }
+  const jwt = request.headers.get('cf-access-jwt-assertion')?.trim();
+  const teamDomain = env.CF_ACCESS_TEAM_DOMAIN?.trim();
+  if (!jwt || !teamDomain) {
+    return null;
+  }
+  return verifyCloudflareAccessJwt(jwt, teamDomain, env.CF_ACCESS_AUD);
+}
+
+async function isAuthorizedWrite(
+  request: Request,
+  env: Env,
+  verifiedIdentity: VerifiedAccessIdentity | null,
+): Promise<boolean> {
   const expected = env.WRITE_ACCESS_TOKEN?.trim();
   if (expected) {
     const headerToken = request.headers.get('x-write-token')?.trim() ?? '';
@@ -77,7 +107,7 @@ async function isAuthorizedWrite(request: Request, env: Env): Promise<boolean> {
     return false;
   }
   if (env.REQUIRE_CF_ACCESS === 'true') {
-    return Boolean(request.headers.get('cf-access-jwt-assertion')?.trim());
+    return verifiedIdentity !== null;
   }
   return true;
 }
@@ -100,7 +130,8 @@ export default {
     const method = request.method.toUpperCase();
 
     if (url.pathname.startsWith('/api/')) {
-      if (!SAFE_READ_METHODS.has(method) && !(await isAuthorizedWrite(request, env))) {
+      const verifiedIdentity = await resolveVerifiedIdentity(request, env);
+      if (!SAFE_READ_METHODS.has(method) && !(await isAuthorizedWrite(request, env, verifiedIdentity))) {
         return withSecurityHeaders(
           Response.json(
             { detail: 'Write access requires authentication (X-Write-Token or Zero Trust Access).' },
@@ -109,26 +140,21 @@ export default {
         );
       }
 
-      if (method === 'GET') {
-        const match = PAGE_IMAGE_RE.exec(url.pathname);
-        if (match) {
-          const [, docId, page] = match;
-          const obj = await env.PAGES_BUCKET.get(`pages/${docId}/page_${page}.webp`);
-          if (obj) {
-            return withSecurityHeaders(
-              new Response(obj.body, {
-                headers: {
-                  'content-type': 'image/webp',
-                  'cache-control': 'public, max-age=86400, immutable',
-                },
-              }),
-            );
-          }
-        }
+      if (
+        isGeminiPostRoute(method, url.pathname) &&
+        !(await checkGeminiRateLimit(request, env.GEMINI_RATE_LIMITER, verifiedIdentity))
+      ) {
+        return withSecurityHeaders(
+          Response.json(
+            { detail: 'Rate limit exceeded for Gemini requests. Please retry shortly.' },
+            { status: 429, headers: { 'Retry-After': '60' } },
+          ),
+        );
       }
 
       const container = env.COMPLIANCE_BACKEND.getByName('primary');
-      return withSecurityHeaders(await container.fetch(request));
+      const containerRequest = prepareContainerRequest(request, verifiedIdentity);
+      return withSecurityHeaders(await container.fetch(containerRequest));
     }
 
     return withSecurityHeaders(await env.ASSETS.fetch(request));

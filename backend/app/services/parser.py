@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
 import logging
+from pathlib import Path
 import time
 from typing import Any, NamedTuple
 
@@ -12,6 +14,21 @@ from google import genai
 from google.genai import errors as genai_errors
 from google.genai import types
 from pydantic import BaseModel
+
+try:
+    import httpx2  # google-genai >=1.x internal async transport
+    _RETRYABLE_PARSE_ERRORS: tuple[type[BaseException], ...] = (
+        genai_errors.ServerError,
+        httpx.TimeoutException,
+        httpx2.TimeoutException,
+        TimeoutError,
+    )
+except ImportError:
+    _RETRYABLE_PARSE_ERRORS = (
+        genai_errors.ServerError,
+        httpx.TimeoutException,
+        TimeoutError,
+    )
 
 from app.db.models import VALID_DOC_TYPES
 from app.prompts.extraction_prompts import EXTRACTION_PROMPTS
@@ -55,6 +72,20 @@ def build_page_windows(
     return [pages[i : i + window_size] for i in range(0, len(pages), window_size)]
 
 
+_GHS_REFERENCE_SHEET_PATH = Path(__file__).resolve().parent.parent / "assets" / "ghs_reference_sheet.png"
+_GHS_REFERENCE_MARKER = (
+    "=== REFERENCE ONLY (DO NOT EXTRACT OR CITE AS A PAGE): "
+    "Official Taiwan APHIA GHS01-GHS09 Pictogram Legend ==="
+)
+
+
+@lru_cache(maxsize=1)
+def _load_ghs_reference_sheet_bytes() -> bytes | None:
+    if _GHS_REFERENCE_SHEET_PATH.is_file():
+        return _GHS_REFERENCE_SHEET_PATH.read_bytes()
+    return None
+
+
 def build_interleaved_contents(
     doc_type: str,
     window_pages: list[ProcessedPage],
@@ -63,6 +94,14 @@ def build_interleaved_contents(
     if doc_type not in EXTRACTION_PROMPTS:
         raise ValueError(f"Unsupported doc_type: {doc_type!r}")
     contents: list[Any] = []
+    needs_ghs_legend = doc_type == "label" or (
+        doc_type == "msds" and any(p.has_images or not p.text_blocks_text for p in window_pages)
+    )
+    if needs_ghs_legend:
+        ghs_ref = _load_ghs_reference_sheet_bytes()
+        if ghs_ref:
+            contents.append(_GHS_REFERENCE_MARKER)
+            contents.append(types.Part.from_bytes(data=ghs_ref, mime_type="image/png"))
     for page in window_pages:
         contents.append(f"=== PAGE {page.page_number} ===")
         use_digital_text = doc_type == "msds" and bool(page.text_blocks_text)
@@ -194,7 +233,7 @@ async def _generate_with_5xx_fallback(
                 getattr(usage, "total_token_count", None),
             )
             return response, model
-        except (genai_errors.ServerError, httpx.TimeoutException, TimeoutError) as exc:
+        except _RETRYABLE_PARSE_ERRORS as exc:
             last_error = exc
             if idx + 1 < len(candidate_models):
                 log.warning(

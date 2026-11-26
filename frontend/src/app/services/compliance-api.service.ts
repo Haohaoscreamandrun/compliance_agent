@@ -3,6 +3,7 @@ import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 
 import {
+  AccessRequestOut,
   AphiaLookupResponse,
   ComplianceAuditReport,
   DocType,
@@ -10,6 +11,7 @@ import {
   DocumentUploadResponse,
   EntityAlias,
   EvaluationSubmissionResponse,
+  MeResponse,
   RegistryLookupResponse,
 } from '../models/compliance.models';
 
@@ -161,6 +163,20 @@ export class ComplianceApiService {
       zh_name: zhName,
       en_name: enName,
       confirmed,
+    });
+  }
+
+  getMe(): Observable<MeResponse> {
+    return this.http.get<MeResponse>(`${this.baseUrl}/me`);
+  }
+
+  submitAccessRequest(
+    requestedCompanyName: string,
+    note?: string,
+  ): Observable<AccessRequestOut> {
+    return this.http.post<AccessRequestOut>(`${this.baseUrl}/access-requests`, {
+      requested_company_name: requestedCompanyName,
+      note: note?.trim() ? note.trim() : null,
     });
   }
 }

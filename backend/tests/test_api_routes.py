@@ -212,6 +212,7 @@ async def test_document_upload_listing_cleanup_and_page_image(
             # GET /api/documents filters & whitespace doc_type -> 400
             doc_row = Document(
                 doc_id=doc_id,
+                company_id="default",
                 filename="label.webp",
                 doc_type="label",
                 reg_no="農藥進03225",
@@ -240,7 +241,7 @@ async def test_document_upload_listing_cleanup_and_page_image(
                 width_px=64,
                 height_px=64,
             )
-            mock_session.execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=page_row))
+            mock_session.execute.return_value = MagicMock(first=MagicMock(return_value=(doc_row, page_row)))
             img_resp = await client.get(f"/api/documents/{doc_id}/pages/1/image")
             assert img_resp.status_code == 200
             assert img_resp.headers["content-type"] == "image/webp"

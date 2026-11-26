@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import CompanyUserContext, get_current_company_user
 from app.db.models import EntityAlias
 from app.db.session import get_db_session
 
@@ -35,10 +36,15 @@ class EntityAliasUpsertRequest(BaseModel):
 
 @router.get("", response_model=list[EntityAliasOut])
 async def list_entity_aliases(
+    user: CompanyUserContext = Depends(get_current_company_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> list[EntityAliasOut]:
     rows = (
-        await session.execute(select(EntityAlias).order_by(EntityAlias.id.desc()))
+        await session.execute(
+            select(EntityAlias)
+            .where(EntityAlias.company_id == user.company_id)
+            .order_by(EntityAlias.id.desc())
+        )
     ).scalars().all()
     return [
         EntityAliasOut(id=r.id, zh_name=r.zh_name, en_name=r.en_name, confirmed=r.confirmed)
@@ -49,13 +55,18 @@ async def list_entity_aliases(
 @router.post("", response_model=EntityAliasOut)
 async def upsert_entity_alias(
     body: EntityAliasUpsertRequest,
+    user: CompanyUserContext = Depends(get_current_company_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> EntityAliasOut:
     zh = " ".join(body.zh_name.split())
     en = " ".join(body.en_name.split())
     existing = (
         await session.execute(
-            select(EntityAlias).where(EntityAlias.zh_name == zh, EntityAlias.en_name == en)
+            select(EntityAlias).where(
+                EntityAlias.company_id == user.company_id,
+                EntityAlias.zh_name == zh,
+                EntityAlias.en_name == en,
+            )
         )
     ).scalar_one_or_none()
 
@@ -63,7 +74,12 @@ async def upsert_entity_alias(
         existing.confirmed = body.confirmed
         row = existing
     else:
-        row = EntityAlias(zh_name=zh, en_name=en, confirmed=body.confirmed)
+        row = EntityAlias(
+            company_id=user.company_id,
+            zh_name=zh,
+            en_name=en,
+            confirmed=body.confirmed,
+        )
         session.add(row)
 
     await session.commit()

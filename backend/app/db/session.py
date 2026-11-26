@@ -56,11 +56,19 @@ async def init_db_schema(engine: AsyncEngine) -> None:
                     "content_sha256 VARCHAR(64)"
                 )
             )
+            await conn.execute(
+                text(
+                    "INSERT INTO companies (company_id, name, created_at) VALUES "
+                    "('default', 'Default Workspace', NOW()), "
+                    "('public_demo', 'Public Demo', NOW()) "
+                    "ON CONFLICT (company_id) DO NOTHING"
+                )
+            )
             await conn.execute(text("DROP INDEX IF EXISTS uq_documents_active_baseline"))
             await conn.execute(
                 text(
                     "CREATE UNIQUE INDEX IF NOT EXISTS uq_documents_active_baseline "
-                    "ON documents (reg_no, doc_type, volume_tag) "
+                    "ON documents (company_id, reg_no, doc_type, volume_tag) "
                     "WHERE is_active_baseline IS TRUE AND reg_no IS NOT NULL"
                 )
             )

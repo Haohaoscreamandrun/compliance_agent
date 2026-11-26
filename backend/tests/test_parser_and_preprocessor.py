@@ -126,6 +126,25 @@ def test_preprocess_msds_extracts_digital_text_blocks_and_skips_image_part_when_
     assert letter_contents[0] == "=== PAGE 1 ==="
     assert not isinstance(letter_contents[1], str)
 
+    # For doc_type='label' and image-bearing 'msds', prepend the official GHS01-GHS09 reference legend
+    label_contents = build_interleaved_contents("label", pages)
+    assert isinstance(label_contents[0], str) and "GHS01-GHS09" in label_contents[0]
+    assert not isinstance(label_contents[1], str)
+    assert label_contents[2] == "=== PAGE 1 ==="
+
+    img_page = ProcessedPage(
+        page_number=1,
+        image_rel_path=pages[0].image_rel_path,
+        webp_bytes=pages[0].webp_bytes,
+        width_px=pages[0].width_px,
+        height_px=pages[0].height_px,
+        text_blocks_text=pages[0].text_blocks_text,
+        has_images=True,
+    )
+    msds_img_contents = build_interleaved_contents("msds", [img_page])
+    assert isinstance(msds_img_contents[0], str) and "GHS01-GHS09" in msds_img_contents[0]
+    assert msds_img_contents[2] == "=== PAGE 1 ==="
+
 
 def test_preprocess_giant_mediabox_pdf_scales_safely_without_oom(tmp_path: Path) -> None:
     # A 14400x14400 pt PDF MediaBox must be scaled to <= 1600px directly during rasterization
@@ -296,6 +315,31 @@ async def test_parse_document_pages_fails_over_on_503_server_error() -> None:
     assert tried_models == ["gemini-3.8-flash", "gemini-3.7-flash"]
     assert res.model_used == "gemini-3.7-flash"
     assert res.used_fallback is True
+
+    # Also verify httpx2.ReadTimeout (google-genai internal transport) fails over cleanly
+    import httpx2
+
+    tried_models.clear()
+
+    async def timeout_then_ok(*, model, contents, config):
+        tried_models.append(model)
+        if model == "gemini-3.8-flash":
+            raise httpx2.ReadTimeout("timed out")
+        payload = ProductLabelExtraction(
+            reg_no={"verbatim_text": "農藥製00001", "value": "農藥製00001", "page": 1, "box_2d": [10, 10, 40, 200]}
+        )
+        return SimpleNamespace(text=payload.model_dump_json(), candidates=[SimpleNamespace(finish_reason="STOP")])
+
+    timeout_client = SimpleNamespace(aio=SimpleNamespace(models=SimpleNamespace(generate_content=timeout_then_ok)))
+    res2 = await parse_document_pages(
+        timeout_client,  # type: ignore[arg-type]
+        "gemini-3.8-flash",
+        "label",
+        pages,
+        fallback_models=["gemini-3.7-flash"],
+    )
+    assert tried_models == ["gemini-3.8-flash", "gemini-3.7-flash"]
+    assert res2.used_fallback is True
 
 
 def test_extract_clauses_for_db_flattens_and_validates_constraints() -> None:
