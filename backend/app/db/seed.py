@@ -10,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import (
     PUBLIC_DEMO_COMPANY_ID,
     PUBLIC_DEMO_REG_NO,
+    AphiaQueryCache,
+    AphiaRecord,
     AuditReportCache,
     Company,
     Document,
@@ -25,6 +27,7 @@ from app.schemas.extraction import (
     ProductLabelExtraction,
 )
 from app.schemas.grounded import GroundedField
+from app.services.aphia_client import _build_query_key
 from app.services.parser import extract_clauses_for_db
 
 
@@ -176,6 +179,51 @@ async def seed_sample_data(session: AsyncSession) -> None:
                 report_json=demo_report.model_dump(),
             )
             .on_conflict_do_nothing(index_elements=["cache_key"])
+        )
+
+        demo_carcinogen = {
+            "source_kind": "carcinogen",
+            "source_key": "demo_carcinogen_99001",
+            "title": "示範殺菌劑 (DEMOFUNGIN) — 公開示範可能致癌評估狀態（合成範例）",
+            "common_name": "示範殺菌劑",
+            "published_date": "2025-10-15",
+            "detail_url": "https://pesticide.aphia.gov.tw/information/Data/Opendata/3",
+        }
+        demo_assessment = {
+            "source_kind": "assessment",
+            "source_key": "demo_assessment_99001",
+            "title": "示範殺菌劑（DEMOFUNGIN）十五年安全性評估資料（公開示範範例）",
+            "common_name": "示範殺菌劑",
+            "published_date": "2026-01-20",
+            "detail_url": "https://pesticide.aphia.gov.tw/information/Data/Opendata/2",
+        }
+        demo_pre_notice = {
+            "source_kind": "announcement",
+            "source_key": "demo_prenotice_99001",
+            "title": "預先通知公告：示範殺菌劑標示加註水生生物警語（公開示範範例）",
+            "common_name": "示範殺菌劑",
+            "published_date": "2026-03-01",
+            "detail_url": "https://pesticide.aphia.gov.tw/information/Data/News",
+        }
+        await session.execute(
+            insert(AphiaRecord)
+            .values(**demo_carcinogen, raw_fields_json={"synthetic_demo": True})
+            .on_conflict_do_nothing(constraint="uq_aphia_source")
+        )
+        demo_tokens = ["示範殺菌劑", "DEMOFUNGIN"]
+        await session.execute(
+            insert(AphiaQueryCache)
+            .values(
+                query_key=_build_query_key(demo_tokens),
+                keywords_json=demo_tokens,
+                result_json={
+                    "synthetic_demo": True,
+                    "carcinogen_matches": [demo_carcinogen],
+                    "assessment_matches": [demo_assessment],
+                    "latest_pre_notice": demo_pre_notice,
+                },
+            )
+            .on_conflict_do_nothing(index_elements=["query_key"])
         )
 
         await session.commit()

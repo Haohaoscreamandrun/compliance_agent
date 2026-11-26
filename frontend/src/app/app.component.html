@@ -68,7 +68,14 @@
     >
       {{ baselinesLoading() ? '載入中…' : '載入基準文件' }}
     </button>
-    <button mat-stroked-button type="button" (click)="tryDemoAudit()">試用範例</button>
+    <button
+      mat-stroked-button
+      type="button"
+      [disabled]="regNo().trim() === '農藥進99001'"
+      (click)="tryDemoAudit()"
+    >
+      試用範例
+    </button>
     @if (me(); as userInfo) {
       @if (userInfo.authenticated && !userInfo.company_id) {
         <button
@@ -323,7 +330,9 @@
                   <span class="aphia-badge is-alert">可能致癌農藥</span>
                   <span>{{ item.title }}</span>
                   @if (item.detail_url) {
-                    <a [href]="item.detail_url" target="_blank" rel="noopener noreferrer">PDF</a>
+                    <a [href]="item.detail_url" target="_blank" rel="noopener noreferrer">{{
+                      item.detail_url.toLowerCase().endsWith('.pdf') ? 'PDF' : '查詢頁面'
+                    }}</a>
                   }
                 </div>
               }

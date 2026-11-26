@@ -231,6 +231,14 @@ describe('AppComponent', () => {
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('申請加入公司');
 
     component.tryDemoAudit();
+    fixture.detectChanges();
+    expect(component.regNo()).toBe('農藥進99001');
+    const demoBtn = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('button'),
+    ).find((b) => b.textContent?.includes('試用範例')) as HTMLButtonElement | undefined;
+    expect(demoBtn?.disabled).toBeTrue();
+
+    component.loadBaselines();
     httpMock.expectOne('/api/registry/%E8%BE%B2%E8%97%A5%E9%80%B299001').flush({
       reg_no: '農藥進99001',
       permit_type: '農藥進',
@@ -241,7 +249,29 @@ describe('AppComponent', () => {
       stale: false,
       fetched_at: '2026-11-26T00:00:00Z',
     });
-    httpMock.expectOne('/api/copilot/audit/%E8%BE%B2%E8%97%A5%E9%80%B299001').flush({
+    httpMock
+      .expectOne(
+        '/api/documents?reg_no=%E8%BE%B2%E8%97%A5%E9%80%B299001&is_active_baseline=true&include_shared_certs=true&limit=50',
+      )
+      .flush([]);
+    httpMock.expectOne('/api/registry/%E8%BE%B2%E8%97%A5%E9%80%B299001/aphia').flush({
+      reg_no: '農藥進99001',
+      chinese_name: '示範殺菌劑',
+      keywords: ['示範殺菌劑', 'DEMOFUNGIN'],
+      carcinogen_matches: [],
+      assessment_matches: [],
+      latest_pre_notice: null,
+      evaluation_submitted_date: null,
+      stale: false,
+      fetched_at: '2026-11-26T00:00:00Z',
+    });
+    expect(component.moaSnapshot()?.reg_no).toBe('農藥進99001');
+    expect(component.auditReport()).toBeNull();
+
+    component.runAudit();
+    const demoAuditReq = httpMock.expectOne('/api/copilot/audit/%E8%BE%B2%E8%97%A5%E9%80%B299001');
+    expect(demoAuditReq.request.method).toBe('GET');
+    demoAuditReq.flush({
       reg_no: '農藥進99001',
       product_name_zh: '示範殺菌劑',
       product_name_en: 'DEMOFUNGIN',
@@ -250,7 +280,6 @@ describe('AppComponent', () => {
       executive_summary_en: 'demo',
       checklist_items: [],
     });
-    expect(component.moaSnapshot()?.reg_no).toBe('農藥進99001');
     expect(component.auditReport()?.reg_no).toBe('農藥進99001');
   });
 

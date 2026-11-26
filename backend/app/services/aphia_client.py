@@ -406,6 +406,17 @@ async def lookup_aphia_for_tokens(
         await session.execute(select(AphiaQueryCache).where(AphiaQueryCache.query_key == qkey))
     ).scalar_one_or_none()
 
+    if cached_row is not None and isinstance(cached_row.result_json, dict) and cached_row.result_json.get("synthetic_demo") is True:
+        data = cached_row.result_json
+        return {
+            "keywords": tokens,
+            "carcinogen_matches": data.get("carcinogen_matches", []),
+            "assessment_matches": data.get("assessment_matches", []),
+            "latest_pre_notice": data.get("latest_pre_notice"),
+            "stale": False,
+            "fetched_at": cached_row.fetched_at,
+        }
+
     if (
         not force_refresh
         and cached_row is not None

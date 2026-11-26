@@ -22,6 +22,7 @@ from app.api.deps import (
     CompanyUserContext,
     get_current_company_user,
     get_optional_company_user,
+    get_verified_email,
 )
 from app.config import Settings
 from app.db.models import (
@@ -401,6 +402,7 @@ def _escape_like(value: str) -> str:
 
 @router.get("", response_model=list[DocumentSummary])
 async def list_documents(
+    request: Request,
     reg_no: str | None = Query(default=None),
     doc_type: DocType | None = Query(default=None),
     is_active_baseline: bool | None = Query(default=None),
@@ -416,117 +418,137 @@ async def list_documents(
     ),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    user: CompanyUserContext = Depends(get_current_company_user),
+    user: CompanyUserContext | None = Depends(get_optional_company_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> list[DocumentSummary]:
     """List uploaded regulatory documents, filtered by company, permit, doc_type, baseline, common_name, or product code."""
-    stmt = (
-        select(Document)
-        .where(Document.company_id == user.company_id)
-        .order_by(Document.uploaded_at.desc())
-    )
     canon_reg: str | None = None
     if reg_no is not None and reg_no != "":
         try:
             canon_reg = validate_reg_no(reg_no)
-            stmt = stmt.where(Document.reg_no == canon_reg)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-    if doc_type is not None and doc_type != "":
-        stmt = stmt.where(Document.doc_type == _validate_doc_type(doc_type))
-    if is_active_baseline is not None:
-        stmt = stmt.where(Document.is_active_baseline.is_(is_active_baseline))
-    if common_name is not None and common_name.strip():
-        pattern = f"%{_escape_like(common_name.strip())}%"
-        clause_match = exists(
-            select(DocumentClause.id).where(
-                DocumentClause.doc_id == Document.doc_id,
-                DocumentClause.section_id.ilike("%common_name%"),
-                or_(
-                    DocumentClause.normalized_value.ilike(pattern, escape="\\"),
-                    DocumentClause.verbatim_text.ilike(pattern, escape="\\"),
-                ),
-            )
+
+    if user is None:
+        if canon_reg != PUBLIC_DEMO_REG_NO:
+            if request is not None and get_verified_email(request) is not None:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Your account is not assigned to a company yet. Submit a Join Company request.",
+                )
+            raise HTTPException(status_code=401, detail="Authentication required.")
+        target_company_id = PUBLIC_DEMO_COMPANY_ID
+    else:
+        target_company_id = user.company_id
+
+    async def _query_company_docs(company_scope: str) -> list[Document]:
+        stmt = (
+            select(Document)
+            .where(Document.company_id == company_scope)
+            .order_by(Document.uploaded_at.desc())
         )
-        stmt = stmt.where(or_(Document.common_name.ilike(pattern, escape="\\"), clause_match))
-    if product_internal_code is not None and product_internal_code.strip():
-        code_pattern = f"%{_escape_like(product_internal_code.strip())}%"
-        stmt = stmt.where(
-            exists(
+        if canon_reg is not None:
+            stmt = stmt.where(Document.reg_no == canon_reg)
+        if doc_type is not None and doc_type != "":
+            stmt = stmt.where(Document.doc_type == _validate_doc_type(doc_type))
+        if is_active_baseline is not None:
+            stmt = stmt.where(Document.is_active_baseline.is_(is_active_baseline))
+        if common_name is not None and common_name.strip():
+            pattern = f"%{_escape_like(common_name.strip())}%"
+            clause_match = exists(
                 select(DocumentClause.id).where(
                     DocumentClause.doc_id == Document.doc_id,
-                    DocumentClause.section_id.ilike("%product_internal_code%"),
+                    DocumentClause.section_id.ilike("%common_name%"),
                     or_(
-                        DocumentClause.normalized_value.ilike(code_pattern, escape="\\"),
-                        DocumentClause.verbatim_text.ilike(code_pattern, escape="\\"),
+                        DocumentClause.normalized_value.ilike(pattern, escape="\\"),
+                        DocumentClause.verbatim_text.ilike(pattern, escape="\\"),
                     ),
                 )
             )
-        )
-
-    rows = list((await session.execute(stmt.offset(offset).limit(limit))).scalars().all())
-    if include_shared_certs and canon_reg is not None:
-        seen_ids = {r.doc_id for r in rows}
-        reg_docs = (
-            await session.execute(
-                select(Document)
-                .where(Document.company_id == user.company_id, Document.reg_no == canon_reg)
-                .order_by(Document.is_active_baseline.desc(), Document.uploaded_at.desc())
-                .limit(100)
-            )
-        ).scalars().all()
-
-        if not any(r.doc_type == "label" for r in rows):
-            seen_vols: set[str] = set()
-            for d in reg_docs:
-                if d.doc_type == "label" and (d.volume_tag or "") not in seen_vols:
-                    seen_vols.add(d.volume_tag or "")
-                    if d.doc_id not in seen_ids:
-                        rows.append(d)
-                        seen_ids.add(d.doc_id)
-
-        for fallback_type in ("msds", "change_cert"):
-            if not any(r.doc_type == fallback_type for r in rows):
-                for d in reg_docs:
-                    if d.doc_type == fallback_type and d.doc_id not in seen_ids:
-                        rows.append(d)
-                        seen_ids.add(d.doc_id)
-                        break
-
-        label_model: ProductLabelExtraction | None = None
-        for r in rows:
-            if r.doc_type == "label":
-                try:
-                    label_model = ProductLabelExtraction.model_validate(r.extracted_data)
-                    break
-                except ValidationError:
-                    pass
-        moa = (
-            await session.execute(select(MoaRegistry).where(MoaRegistry.reg_no == canon_reg))
-        ).scalar_one_or_none()
-        shared_certs = (
-            await session.execute(
-                select(Document)
-                .where(
-                    Document.company_id == user.company_id,
-                    Document.doc_type == "change_cert",
-                    Document.reg_no.is_(None),
+            stmt = stmt.where(or_(Document.common_name.ilike(pattern, escape="\\"), clause_match))
+        if product_internal_code is not None and product_internal_code.strip():
+            code_pattern = f"%{_escape_like(product_internal_code.strip())}%"
+            stmt = stmt.where(
+                exists(
+                    select(DocumentClause.id).where(
+                        DocumentClause.doc_id == Document.doc_id,
+                        DocumentClause.section_id.ilike("%product_internal_code%"),
+                        or_(
+                            DocumentClause.normalized_value.ilike(code_pattern, escape="\\"),
+                            DocumentClause.verbatim_text.ilike(code_pattern, escape="\\"),
+                        ),
+                    )
                 )
-                .order_by(Document.uploaded_at.desc())
-                .limit(50)
             )
-        ).scalars().all()
-        for cert_doc in shared_certs:
-            if cert_doc.doc_id in seen_ids:
-                continue
-            try:
-                parsed_cert = NotarizedCertExtraction.model_validate(cert_doc.extracted_data)
-            except ValidationError:
-                continue
-            _, score = score_matching_cert_product(parsed_cert, canon_reg, label_model, moa)
-            if score > 0:
-                rows.append(cert_doc)
-                seen_ids.add(cert_doc.doc_id)
+
+        rows = list((await session.execute(stmt.offset(offset).limit(limit))).scalars().all())
+        if include_shared_certs and canon_reg is not None:
+            seen_ids = {r.doc_id for r in rows}
+            reg_docs = (
+                await session.execute(
+                    select(Document)
+                    .where(Document.company_id == company_scope, Document.reg_no == canon_reg)
+                    .order_by(Document.is_active_baseline.desc(), Document.uploaded_at.desc())
+                    .limit(100)
+                )
+            ).scalars().all()
+
+            if not any(r.doc_type == "label" for r in rows):
+                seen_vols: set[str] = set()
+                for d in reg_docs:
+                    if d.doc_type == "label" and (d.volume_tag or "") not in seen_vols:
+                        seen_vols.add(d.volume_tag or "")
+                        if d.doc_id not in seen_ids:
+                            rows.append(d)
+                            seen_ids.add(d.doc_id)
+
+            for fallback_type in ("msds", "change_cert"):
+                if not any(r.doc_type == fallback_type for r in rows):
+                    for d in reg_docs:
+                        if d.doc_type == fallback_type and d.doc_id not in seen_ids:
+                            rows.append(d)
+                            seen_ids.add(d.doc_id)
+                            break
+
+            label_model: ProductLabelExtraction | None = None
+            for r in rows:
+                if r.doc_type == "label":
+                    try:
+                        label_model = ProductLabelExtraction.model_validate(r.extracted_data)
+                        break
+                    except ValidationError:
+                        pass
+            moa = (
+                await session.execute(select(MoaRegistry).where(MoaRegistry.reg_no == canon_reg))
+            ).scalar_one_or_none()
+            shared_certs = (
+                await session.execute(
+                    select(Document)
+                    .where(
+                        Document.company_id == company_scope,
+                        Document.doc_type == "change_cert",
+                        Document.reg_no.is_(None),
+                    )
+                    .order_by(Document.uploaded_at.desc())
+                    .limit(50)
+                )
+            ).scalars().all()
+            for cert_doc in shared_certs:
+                if cert_doc.doc_id in seen_ids:
+                    continue
+                try:
+                    parsed_cert = NotarizedCertExtraction.model_validate(cert_doc.extracted_data)
+                except ValidationError:
+                    continue
+                _, score = score_matching_cert_product(parsed_cert, canon_reg, label_model, moa)
+                if score > 0:
+                    rows.append(cert_doc)
+                    seen_ids.add(cert_doc.doc_id)
+        return rows
+
+    rows = await _query_company_docs(target_company_id)
+    if not rows and canon_reg == PUBLIC_DEMO_REG_NO and target_company_id != PUBLIC_DEMO_COMPANY_ID:
+        rows = await _query_company_docs(PUBLIC_DEMO_COMPANY_ID)
 
     return [
         DocumentSummary(
