@@ -21,7 +21,7 @@ import httpx
 from sqlalchemy.dialects.postgresql import Insert, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import MoaRegistry
+from app.db.models import PUBLIC_DEMO_REG_NO, MoaRegistry
 
 log = logging.getLogger(__name__)
 
@@ -195,6 +195,8 @@ async def get_registry_snapshot(
     permit_type, permit_number = split_reg_no(reg_no)
     key = f"{permit_type}{permit_number}"
     cached = await session.get(MoaRegistry, key)
+    if key == PUBLIC_DEMO_REG_NO and isinstance(cached, MoaRegistry):
+        return RegistryResult(cached, stale=False)
     try:
         columns = await fetch_registry_columns(http, base_url, key, cached)
     except (httpx.HTTPError, ValueError) as exc:

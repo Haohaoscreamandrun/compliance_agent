@@ -8,8 +8,10 @@ from fastapi import Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import DEFAULT_COMPANY_ID, CompanyUser
+from app.db.models import DEFAULT_COMPANY_ID, PUBLIC_DEMO_COMPANY_ID, CompanyUser
 from app.db.session import get_db_session
+
+WORKSPACE_HEADER = "x-workspace-company-id"
 
 
 @dataclass(frozen=True)
@@ -19,6 +21,7 @@ class CompanyUserContext:
     email: str
     company_id: str
     role: str
+    can_manage_public_demo: bool = False
 
 
 def _is_cf_access_required(request: Request) -> bool:
@@ -32,6 +35,31 @@ def get_verified_email(request: Request) -> str | None:
     return raw or None
 
 
+def _apply_workspace_override(
+    request: Request,
+    base_user: CompanyUserContext | None,
+) -> CompanyUserContext | None:
+    requested = request.headers.get(WORKSPACE_HEADER, "").strip()
+    if not requested:
+        return base_user
+    if base_user is None or not base_user.can_manage_public_demo:
+        raise HTTPException(
+            status_code=403,
+            detail="Only default workspace admins may switch into the public demo workspace.",
+        )
+    if requested not in (DEFAULT_COMPANY_ID, PUBLIC_DEMO_COMPANY_ID):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported workspace override '{requested}'; only '{DEFAULT_COMPANY_ID}' and '{PUBLIC_DEMO_COMPANY_ID}' are allowed.",
+        )
+    return CompanyUserContext(
+        email=base_user.email,
+        company_id=requested,
+        role=base_user.role,
+        can_manage_public_demo=True,
+    )
+
+
 async def get_optional_company_user(
     request: Request,
     session: AsyncSession = Depends(get_db_session),
@@ -40,19 +68,27 @@ async def get_optional_company_user(
     email = get_verified_email(request)
     if email is None:
         if _is_cf_access_required(request):
-            return None
-        return CompanyUserContext(
+            return _apply_workspace_override(request, None)
+        base_user = CompanyUserContext(
             email="local@localhost",
             company_id=DEFAULT_COMPANY_ID,
             role="admin",
+            can_manage_public_demo=True,
         )
+        return _apply_workspace_override(request, base_user)
 
     row = (
         await session.execute(select(CompanyUser).where(CompanyUser.email == email))
     ).scalar_one_or_none()
     if row is None:
-        return None
-    return CompanyUserContext(email=row.email, company_id=row.company_id, role=row.role)
+        return _apply_workspace_override(request, None)
+    base_user = CompanyUserContext(
+        email=row.email,
+        company_id=row.company_id,
+        role=row.role,
+        can_manage_public_demo=(row.company_id == DEFAULT_COMPANY_ID and row.role == "admin"),
+    )
+    return _apply_workspace_override(request, base_user)
 
 
 async def get_current_company_user(

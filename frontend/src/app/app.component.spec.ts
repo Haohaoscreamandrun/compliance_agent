@@ -253,4 +253,67 @@ describe('AppComponent', () => {
     expect(component.moaSnapshot()?.reg_no).toBe('農藥進99001');
     expect(component.auditReport()?.reg_no).toBe('農藥進99001');
   });
+
+  it('allows default admin to switch into public_demo workspace with header and warning banner', () => {
+    fixture.detectChanges();
+    httpMock.expectOne('/api/me').flush({
+      authenticated: true,
+      email: 'owner@example.com',
+      company_id: 'default',
+      company_name: 'Default Workspace',
+      role: 'admin',
+      can_manage_public_demo: true,
+      pending_request: null,
+    });
+    httpMock.expectOne('/api/documents?limit=50').flush([]);
+    httpMock.expectOne('/api/entity-aliases').flush([]);
+    fixture.detectChanges();
+
+    expect(component.canManagePublicDemo()).toBeTrue();
+    expect(component.isPublicDemoMode()).toBeFalse();
+
+    component.togglePublicDemoWorkspace();
+    expect(component.isPublicDemoMode()).toBeTrue();
+    expect(component.regNo()).toBe('農藥進99001');
+
+    const meReq = httpMock.expectOne('/api/me');
+    expect(meReq.request.headers.get('X-Workspace-Company-Id')).toBe('public_demo');
+    meReq.flush({
+      authenticated: true,
+      email: 'owner@example.com',
+      company_id: 'public_demo',
+      company_name: 'Public Demo',
+      role: 'admin',
+      can_manage_public_demo: true,
+      pending_request: null,
+    });
+
+    const docsReq = httpMock.expectOne('/api/documents?limit=50');
+    expect(docsReq.request.headers.get('X-Workspace-Company-Id')).toBe('public_demo');
+    docsReq.flush([]);
+
+    const aliasReq = httpMock.expectOne('/api/entity-aliases');
+    expect(aliasReq.request.headers.get('X-Workspace-Company-Id')).toBe('public_demo');
+    aliasReq.flush([]);
+
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('公開示範編輯模式');
+
+    component.togglePublicDemoWorkspace();
+    expect(component.isPublicDemoMode()).toBeFalse();
+    expect(component.regNo()).toBe('');
+    const backMe = httpMock.expectOne('/api/me');
+    expect(backMe.request.headers.has('X-Workspace-Company-Id')).toBeFalse();
+    backMe.flush({
+      authenticated: true,
+      email: 'owner@example.com',
+      company_id: 'default',
+      company_name: 'Default Workspace',
+      role: 'admin',
+      can_manage_public_demo: true,
+      pending_request: null,
+    });
+    httpMock.expectOne('/api/documents?limit=50').flush([]);
+    httpMock.expectOne('/api/entity-aliases').flush([]);
+  });
 });

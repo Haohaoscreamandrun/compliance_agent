@@ -104,6 +104,9 @@ export class AppComponent implements OnInit {
   // Theme & Identity state
   readonly theme = signal<'light' | 'dark'>(this.readInitialTheme());
   readonly me = signal<MeResponse | null>(null);
+  readonly activeWorkspace = computed(() => this.api.workspaceCompanyId());
+  readonly isPublicDemoMode = computed(() => this.api.workspaceCompanyId() === 'public_demo');
+  readonly canManagePublicDemo = computed(() => !!this.me()?.can_manage_public_demo);
 
   // Permit, MOA & Pulled Baselines state
   readonly regNo = signal('');
@@ -180,6 +183,23 @@ export class AppComponent implements OnInit {
           this.me.set(null);
         },
       });
+  }
+
+  togglePublicDemoWorkspace(): void {
+    if (!this.canManagePublicDemo()) return;
+    const next = this.isPublicDemoMode() ? 'default' : 'public_demo';
+    this.api.setWorkspaceCompanyId(next);
+    this.baselinesLoaded.set(false);
+    this.baselineDocs.set([]);
+    this.moaSnapshot.set(null);
+    this.aphiaSnapshot.set(null);
+    this.auditReport.set(null);
+    this.auditError.set(null);
+    this.viewerDocId.set(null);
+    this.activeCitation.set(null);
+    this.compareCitations.set([]);
+    this.regNo.set(next === 'public_demo' ? '農藥進99001' : '');
+    this.loadMe();
   }
 
   tryDemoAudit(): void {

@@ -142,3 +142,86 @@ async def test_documents_require_allowlisted_company_user_and_isolate_pages(tmp_
         resp_demo = await client.get("/api/documents/seed_demo/pages/1/image")
         assert resp_demo.status_code == 200
         assert "public" in resp_demo.headers.get("cache-control", "")
+
+
+async def test_public_demo_workspace_switcher_authorization_and_guardrails(tmp_path: Path) -> None:
+    app = create_app(
+        Settings(_env_file=None, storage_dir=tmp_path, require_cf_access=True, gemini_api_key="test-key"),
+        init_db=False,
+    )
+    session = AsyncMock()
+    app.dependency_overrides[get_db_session] = lambda: session
+
+    default_admin = CompanyUser(email="owner@example.com", company_id="default", role="admin")
+    other_company_admin = CompanyUser(email="boss@compb.com", company_id="comp_b", role="admin")
+
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            # 1. Other company's admin cannot switch into public_demo -> 403
+            session.execute.return_value = MagicMock(
+                scalar_one_or_none=MagicMock(return_value=other_company_admin)
+            )
+            resp_other = await client.get(
+                "/api/me",
+                headers={
+                    "x-auth-user-email": "boss@compb.com",
+                    "x-workspace-company-id": "public_demo",
+                },
+            )
+            assert resp_other.status_code == 403
+
+            # 2. Default admin cannot switch into arbitrary tenant -> 400
+            session.execute.return_value = MagicMock(
+                scalar_one_or_none=MagicMock(return_value=default_admin)
+            )
+            resp_invalid = await client.get(
+                "/api/me",
+                headers={
+                    "x-auth-user-email": "owner@example.com",
+                    "x-workspace-company-id": "comp_b",
+                },
+            )
+            assert resp_invalid.status_code == 400
+
+            # 3. Default admin CAN switch into public_demo and sees can_manage_public_demo=True
+            session.execute.side_effect = [
+                MagicMock(scalar_one_or_none=MagicMock(return_value=default_admin)),
+                MagicMock(scalar_one_or_none=MagicMock(return_value="Public Demo")),
+            ]
+            resp_me = await client.get(
+                "/api/me",
+                headers={
+                    "x-auth-user-email": "owner@example.com",
+                    "x-workspace-company-id": "public_demo",
+                },
+            )
+            assert resp_me.status_code == 200
+            body = resp_me.json()
+            assert body["company_id"] == "public_demo"
+            assert body["can_manage_public_demo"] is True
+
+            # 4. In public_demo mode, uploading or auditing a real permit (non-99001) is blocked with 400
+            session.execute.side_effect = None
+            session.execute.return_value = MagicMock(
+                scalar_one_or_none=MagicMock(return_value=default_admin)
+            )
+            resp_real_upload = await client.post(
+                "/api/documents/upload",
+                headers={
+                    "x-auth-user-email": "owner@example.com",
+                    "x-workspace-company-id": "public_demo",
+                },
+                data={"doc_type": "label", "reg_no": "農藥進00569"},
+                files={"file": ("real.webp", _make_webp_bytes(), "image/webp")},
+            )
+            assert resp_real_upload.status_code == 400
+
+            resp_real_audit = await client.post(
+                "/api/copilot/audit/農藥進00569",
+                headers={
+                    "x-auth-user-email": "owner@example.com",
+                    "x-workspace-company-id": "public_demo",
+                },
+            )
+            assert resp_real_audit.status_code == 400
