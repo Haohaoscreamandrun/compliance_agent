@@ -37,7 +37,9 @@
             <mat-chip>MSDS: {{ r.msds_doc_id_used }}</mat-chip>
           </mat-chip-set>
         }
-        <button type="button" mat-stroked-button (click)="forceRefresh.emit()">重新審查</button>
+        @if (canForceRefresh()) {
+          <button type="button" mat-stroked-button (click)="forceRefresh.emit()">重新審查</button>
+        }
       </div>
     </header>
 

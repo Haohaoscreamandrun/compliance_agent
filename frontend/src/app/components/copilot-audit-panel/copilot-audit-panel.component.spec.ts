@@ -83,5 +83,10 @@ describe('CopilotAuditPanelComponent', () => {
     expect(btn?.getAttribute('aria-label')).toContain('製造廠名稱');
     btn?.click();
     expect(emitted).toEqual([[citation]]);
+
+    expect(fixture.nativeElement.textContent).toContain('重新審查');
+    fixture.componentRef.setInput('canForceRefresh', false);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).not.toContain('重新審查');
   });
 });

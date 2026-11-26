@@ -54,12 +54,12 @@ async def get_cached_audit_report(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    if user is None:
-        if canon_reg != PUBLIC_DEMO_REG_NO:
-            if get_verified_email(request) is None:
-                raise HTTPException(status_code=401, detail="Authentication required.")
-            raise HTTPException(status_code=403, detail="Your account is not assigned to a company yet.")
+    if canon_reg == PUBLIC_DEMO_REG_NO:
         target_company_id = PUBLIC_DEMO_COMPANY_ID
+    elif user is None:
+        if get_verified_email(request) is None:
+            raise HTTPException(status_code=401, detail="Authentication required.")
+        raise HTTPException(status_code=403, detail="Your account is not assigned to a company yet.")
     else:
         target_company_id = user.company_id
 
@@ -74,18 +74,6 @@ async def get_cached_audit_report(
             .limit(1)
         )
     ).scalar_one_or_none()
-    if not isinstance(cached, AuditReportCache) and canon_reg == PUBLIC_DEMO_REG_NO and target_company_id != PUBLIC_DEMO_COMPANY_ID:
-        cached = (
-            await session.execute(
-                select(AuditReportCache)
-                .where(
-                    AuditReportCache.company_id == PUBLIC_DEMO_COMPANY_ID,
-                    AuditReportCache.reg_no == canon_reg,
-                )
-                .order_by(AuditReportCache.created_at.desc())
-                .limit(1)
-            )
-        ).scalar_one_or_none()
     if not isinstance(cached, AuditReportCache):
         raise HTTPException(status_code=404, detail=f"No cached audit report found for '{canon_reg}'.")
     report = ComplianceAuditReport.model_validate(cached.report_json)

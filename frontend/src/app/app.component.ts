@@ -107,6 +107,9 @@ export class AppComponent implements OnInit {
   readonly activeWorkspace = computed(() => this.api.workspaceCompanyId());
   readonly isPublicDemoMode = computed(() => this.api.workspaceCompanyId() === 'public_demo');
   readonly canManagePublicDemo = computed(() => !!this.me()?.can_manage_public_demo);
+  readonly isReadOnlyPublicDemo = computed(
+    () => this.regNo().trim() === '農藥進99001' && !this.isPublicDemoMode(),
+  );
 
   // Permit, MOA & Pulled Baselines state
   readonly regNo = signal('');
@@ -328,7 +331,7 @@ export class AppComponent implements OnInit {
     this.auditReport.set(null);
     this.auditLoading.set(true);
     this.auditError.set(null);
-    const isReadOnlyPublicDemo = target === '農藥進99001' && !this.isPublicDemoMode();
+    const isReadOnlyPublicDemo = this.isReadOnlyPublicDemo();
     const audit$ = isReadOnlyPublicDemo
       ? this.api.getCachedAuditReport(target)
       : this.api.runComplianceAudit(target, forceRefresh);

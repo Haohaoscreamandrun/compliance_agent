@@ -35,6 +35,7 @@ export class CopilotAuditPanelComponent {
   readonly report = input<ComplianceAuditReport | null>(null);
   readonly loading = input<boolean>(false);
   readonly errorMessage = input<string | null>(null);
+  readonly canForceRefresh = input<boolean>(true);
 
   readonly basicChecklistItems = computed(() =>
     (this.report()?.checklist_items ?? []).filter((item) => item.category !== 'crop_usage_sync'),

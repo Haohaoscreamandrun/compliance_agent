@@ -402,6 +402,7 @@
               [report]="auditReport()"
               [loading]="auditLoading()"
               [errorMessage]="auditError()"
+              [canForceRefresh]="!isReadOnlyPublicDemo()"
               (selectCitations)="onSelectCitations($event)"
               (forceRefresh)="runAudit(true)"
             />
