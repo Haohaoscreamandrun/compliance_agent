@@ -430,21 +430,23 @@ async def list_documents(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if user is None:
-        if canon_reg != PUBLIC_DEMO_REG_NO:
+        if canon_reg is not None and canon_reg != PUBLIC_DEMO_REG_NO:
             if request is not None and get_verified_email(request) is not None:
                 raise HTTPException(
                     status_code=403,
                     detail="Your account is not assigned to a company yet. Submit a Join Company request.",
                 )
             raise HTTPException(status_code=401, detail="Authentication required.")
-        target_company_id = PUBLIC_DEMO_COMPANY_ID
+        company_scopes: tuple[str, ...] = (PUBLIC_DEMO_COMPANY_ID,)
+    elif user.company_id == PUBLIC_DEMO_COMPANY_ID or canon_reg == PUBLIC_DEMO_REG_NO:
+        company_scopes = (PUBLIC_DEMO_COMPANY_ID,)
     else:
-        target_company_id = user.company_id
+        company_scopes = (user.company_id, PUBLIC_DEMO_COMPANY_ID)
 
-    async def _query_company_docs(company_scope: str) -> list[Document]:
+    async def _query_company_docs(scopes: tuple[str, ...]) -> list[Document]:
         stmt = (
             select(Document)
-            .where(Document.company_id == company_scope)
+            .where(Document.company_id.in_(scopes))
             .order_by(Document.uploaded_at.desc())
         )
         if canon_reg is not None:
@@ -487,7 +489,7 @@ async def list_documents(
             reg_docs = (
                 await session.execute(
                     select(Document)
-                    .where(Document.company_id == company_scope, Document.reg_no == canon_reg)
+                    .where(Document.company_id.in_(scopes), Document.reg_no == canon_reg)
                     .order_by(Document.is_active_baseline.desc(), Document.uploaded_at.desc())
                     .limit(100)
                 )
@@ -525,7 +527,7 @@ async def list_documents(
                 await session.execute(
                     select(Document)
                     .where(
-                        Document.company_id == company_scope,
+                        Document.company_id.in_(scopes),
                         Document.doc_type == "change_cert",
                         Document.reg_no.is_(None),
                     )
@@ -546,9 +548,7 @@ async def list_documents(
                     seen_ids.add(cert_doc.doc_id)
         return rows
 
-    rows = await _query_company_docs(target_company_id)
-    if not rows and canon_reg == PUBLIC_DEMO_REG_NO and target_company_id != PUBLIC_DEMO_COMPANY_ID:
-        rows = await _query_company_docs(PUBLIC_DEMO_COMPANY_ID)
+    rows = await _query_company_docs(company_scopes)
 
     return [
         DocumentSummary(

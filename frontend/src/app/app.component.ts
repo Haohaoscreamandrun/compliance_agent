@@ -177,8 +177,8 @@ export class AppComponent implements OnInit {
       .subscribe({
         next: (info) => {
           this.me.set(info);
+          this.loadDocuments();
           if (info.company_id) {
-            this.loadDocuments();
             this.loadEntityAliases();
           }
         },

@@ -543,3 +543,80 @@ def test_english_label_common_name_zh_formulation_moa_dosage_and_str_addr_match(
         raw_core_json={},
     )
     assert run_cascade_diff(reg_no="農藥進00569", label=label, label_doc_id="l1", change_cert=moc, cert_doc_id="moc1", moa=moa) == []
+
+
+def test_bilingual_msds_iupac_cas_canton_and_parenthetical_entity_no_false_positives() -> None:
+    label = ProductLabelExtraction(
+        reg_no=_gf("農藥進99001"),
+        common_name=_gf("綠安寧"),
+        iupac_name=_gf("methyl 2-[2-(4-chlorophenyl)ethoxy]-N-(2-methoxyethyl)acetamide"),
+        formulation_type=_gf("水懸劑"),
+        dosage_and_content=_gf("25%"),
+        foreign_manufacturer_name=_gf("Helios AgroScience S.A."),
+        foreign_manufacturer_address=_gf("Grenzacherstrasse 124, 4058 Basel, Switzerland"),
+        local_permit_holder_name=_gf("範例農業科技股份有限公司"),
+    )
+    msds = MsdsExtraction(
+        common_name=_gf("綠安寧 / Verdantizole"),
+        iupac_or_cas_name=_gf("methyl 2-[2-(4-chlorophenyl)ethoxy]-N-(2-methoxyethyl)acetamide, CAS 99001-25-0"),
+        formulation_type=_gf("SC"),
+        dosage_and_content=_gf("25%"),
+    )
+    loa = NotarizedCertExtraction(
+        cert_subtype=_gf("LoA", "loa"),
+        issuing_state_or_country=_gf("Basel-Stadt, Switzerland"),
+        factory_state_or_country=_gf("Basel, Switzerland"),
+        authorized_entity_name=_gf("範例農業科技股份有限公司 (Demo AgroTech Co., Ltd.)"),
+        certified_factory_name=_gf("Helios AgroScience S.A."),
+        certified_factory_address=_gf("Grenzacherstrasse 124, 4058 Basel, Switzerland"),
+        products=[AuthorizedProductItem(common_name=_gf("Verdantizole"))],
+    )
+    moa = MoaRegistry(
+        reg_no="農藥進99001",
+        permit_type="農藥進",
+        permit_number="99001",
+        chinese_name="綠安寧",
+        english_name="Verdantizole",
+        company_name="範例農業科技股份有限公司",
+        foreign_manufacturer="Helios AgroScience S.A.",
+        formulation="水懸劑",
+        content_pct="25%",
+        raw_core_json={},
+    )
+    assert (
+        run_cascade_diff(
+            reg_no="農藥進99001",
+            label=label,
+            label_doc_id="l1",
+            msds=msds,
+            msds_doc_id="m1",
+            change_cert=loa,
+            cert_doc_id="c1",
+            moa=moa,
+        )
+        == []
+    )
+
+    # Guardrail: same-script parenthetical (e.g. "(Old Plant)") and different states still flag
+    diff_cert = NotarizedCertExtraction(
+        cert_subtype=_gf("LoA", "loa"),
+        issuing_state_or_country=_gf("Texas, USA"),
+        factory_state_or_country=_gf("California, USA"),
+        authorized_entity_name=_gf("Demo Corp. (Old Branch)"),
+        certified_factory_name=_gf("Helios AgroScience S.A."),
+        products=[AuthorizedProductItem(common_name=_gf("Verdantizole"))],
+    )
+    moa_us = MoaRegistry(
+        reg_no="農藥進99001",
+        permit_type="農藥進",
+        permit_number="99001",
+        chinese_name="綠安寧",
+        english_name="Verdantizole",
+        company_name="Demo Corp.",
+        foreign_manufacturer="Helios AgroScience S.A.",
+        raw_core_json={},
+    )
+    flagged = run_cascade_diff(reg_no="農藥進99001", change_cert=diff_cert, cert_doc_id="c2", moa=moa_us)
+    fields = {f.field_name for f in flagged}
+    assert "證明文件簽發地與製造廠所在地差異" in fields
+    assert "MOA 登記國內業者同步狀態" in fields
