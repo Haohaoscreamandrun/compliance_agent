@@ -106,7 +106,7 @@ export class AppComponent implements OnInit {
   readonly me = signal<MeResponse | null>(null);
 
   // Permit, MOA & Pulled Baselines state
-  readonly regNo = signal('農藥進00569');
+  readonly regNo = signal('');
   readonly moaSnapshot = signal<RegistryLookupResponse | null>(null);
   readonly aphiaSnapshot = signal<AphiaLookupResponse | null>(null);
   readonly aphiaRefreshing = signal(false);

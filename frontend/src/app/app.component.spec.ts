@@ -35,10 +35,11 @@ describe('AppComponent', () => {
     });
   }
 
-  it('loads all documents and aliases on init with sidenav closed', () => {
+  it('loads all documents and aliases on init with sidenav closed and empty regNo', () => {
     fixture.detectChanges();
     flushInitMe();
     expect(component.sidenavOpen()).toBeFalse();
+    expect(component.regNo()).toBe('');
 
     const docReq = httpMock.expectOne('/api/documents?limit=50');
     expect(docReq.request.method).toBe('GET');
@@ -111,6 +112,7 @@ describe('AppComponent', () => {
     httpMock.expectOne('/api/documents?limit=50').flush([]);
     httpMock.expectOne('/api/entity-aliases').flush([]);
 
+    component.regNo.set('農藥進00569');
     component.loadBaselines();
     httpMock.expectOne('/api/registry/%E8%BE%B2%E8%97%A5%E9%80%B200569').flush({
       reg_no: '農藥進00569',
@@ -144,6 +146,7 @@ describe('AppComponent', () => {
     httpMock.expectOne('/api/documents?limit=50').flush([]);
     httpMock.expectOne('/api/entity-aliases').flush([]);
 
+    component.regNo.set('農藥進00569');
     component.loadBaselines();
     expect(component.baselinesLoaded()).toBeTrue();
 
@@ -207,6 +210,7 @@ describe('AppComponent', () => {
     httpMock.expectOne('/api/documents?limit=50').flush([]);
     httpMock.expectOne('/api/entity-aliases').flush([]);
 
+    component.regNo.set('農藥進00569');
     component.runAudit();
     const auditReq = httpMock.expectOne('/api/copilot/audit/%E8%BE%B2%E8%97%A5%E9%80%B200569');
     auditReq.flush({ detail: [{ msg: 'Invalid reg_no' }] }, { status: 422, statusText: 'Unprocessable' });
@@ -227,9 +231,15 @@ describe('AppComponent', () => {
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('申請加入公司');
 
     component.tryDemoAudit();
-    httpMock.expectOne('/api/registry/%E8%BE%B2%E8%97%A5%E9%80%B299001').flush(null, {
-      status: 404,
-      statusText: 'Not Found',
+    httpMock.expectOne('/api/registry/%E8%BE%B2%E8%97%A5%E9%80%B299001').flush({
+      reg_no: '農藥進99001',
+      permit_type: '農藥進',
+      permit_number: '99001',
+      chinese_name: '示範殺菌劑',
+      english_name: 'DEMOFUNGIN',
+      company_name: '示範農化股份有限公司',
+      stale: false,
+      fetched_at: '2026-11-26T00:00:00Z',
     });
     httpMock.expectOne('/api/copilot/audit/%E8%BE%B2%E8%97%A5%E9%80%B299001').flush({
       reg_no: '農藥進99001',
@@ -240,6 +250,7 @@ describe('AppComponent', () => {
       executive_summary_en: 'demo',
       checklist_items: [],
     });
+    expect(component.moaSnapshot()?.reg_no).toBe('農藥進99001');
     expect(component.auditReport()?.reg_no).toBe('農藥進99001');
   });
 });

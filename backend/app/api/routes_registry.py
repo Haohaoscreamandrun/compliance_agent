@@ -18,7 +18,7 @@ from app.api.deps import (
     get_optional_company_user,
 )
 from app.config import Settings
-from app.db.models import ChemicalEvaluation, _utc_now
+from app.db.models import PUBLIC_DEMO_REG_NO, ChemicalEvaluation, MoaRegistry, _utc_now
 from app.db.session import get_db_session
 from app.services.aphia_client import (
     extract_ingredient_tokens,
@@ -29,10 +29,25 @@ from app.services.cascade_diff import validate_reg_no
 from app.services.moa_client import (
     MoaNotFoundError,
     MoaUnavailableError,
+    RegistryResult,
     get_registry_snapshot,
 )
 
 router = APIRouter(prefix="/api/registry", tags=["registry"])
+
+
+async def _resolve_registry_snapshot(
+    session: AsyncSession,
+    http: httpx.AsyncClient,
+    base_url: str,
+    canon_reg: str,
+) -> RegistryResult:
+    """Serve the seeded synthetic MOA record for PUBLIC_DEMO_REG_NO when cached; otherwise query MOA live."""
+    if canon_reg == PUBLIC_DEMO_REG_NO:
+        cached_demo = await session.get(MoaRegistry, canon_reg)
+        if isinstance(cached_demo, MoaRegistry):
+            return RegistryResult(cached_demo, stale=False)
+    return await get_registry_snapshot(session, http, base_url, canon_reg)
 
 
 class RegistryLookupResponse(BaseModel):
@@ -104,7 +119,7 @@ async def lookup_aphia_by_reg_no(
     settings: Settings = request.app.state.settings
     http: httpx.AsyncClient = request.app.state.http_client
     try:
-        moa_res = await get_registry_snapshot(session, http, settings.moa_api_base_url, canon_reg)
+        moa_res = await _resolve_registry_snapshot(session, http, settings.moa_api_base_url, canon_reg)
     except MoaNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except MoaUnavailableError as exc:
@@ -161,7 +176,7 @@ async def save_evaluation_submission_date(
     settings: Settings = request.app.state.settings
     http: httpx.AsyncClient = request.app.state.http_client
     try:
-        moa_res = await get_registry_snapshot(session, http, settings.moa_api_base_url, canon_reg)
+        moa_res = await _resolve_registry_snapshot(session, http, settings.moa_api_base_url, canon_reg)
     except MoaNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except MoaUnavailableError as exc:
@@ -230,7 +245,7 @@ async def lookup_registry(
     settings: Settings = request.app.state.settings
     http: httpx.AsyncClient = request.app.state.http_client
     try:
-        result = await get_registry_snapshot(session, http, settings.moa_api_base_url, canon_reg)
+        result = await _resolve_registry_snapshot(session, http, settings.moa_api_base_url, canon_reg)
     except MoaNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except MoaUnavailableError as exc:
