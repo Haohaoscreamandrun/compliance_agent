@@ -29,6 +29,7 @@ def _utc_now() -> datetime:
 VALID_DOC_TYPES = ("label", "msds", "change_cert", "official_letter")
 DEFAULT_COMPANY_ID = "default"
 PUBLIC_DEMO_COMPANY_ID = "public_demo"
+PUBLIC_DEMO_REG_NO = "農藥進99001"
 
 
 class Base(DeclarativeBase):

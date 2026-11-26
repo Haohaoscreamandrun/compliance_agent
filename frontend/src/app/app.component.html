@@ -47,10 +47,15 @@
         type="text"
         [ngModel]="regNo()"
         (ngModelChange)="regNo.set($event)"
-        placeholder="e.g. 農藥進00569"
+        placeholder="例：農藥進99001"
       />
     </mat-form-field>
-    <button mat-flat-button type="button" [disabled]="baselinesLoading()" (click)="loadBaselines()">
+    <button
+      mat-flat-button
+      type="button"
+      [disabled]="baselinesLoading() || !regNo().trim()"
+      (click)="loadBaselines()"
+    >
       {{ baselinesLoading() ? '載入中…' : '載入基準文件' }}
     </button>
     <button mat-stroked-button type="button" (click)="tryDemoAudit()">試用範例</button>

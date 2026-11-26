@@ -97,6 +97,25 @@ async def test_health_and_registry_routes(tmp_path: Path, monkeypatch: pytest.Mo
             monkeypatch.setattr("app.api.routes_registry.get_registry_snapshot", _not_found)
             assert (await client.get("/api/registry/農藥進99999")).status_code == 404
 
+            # Seeded synthetic PUBLIC_DEMO_REG_NO serves cached MoaRegistry without calling live MOA
+            demo_moa = MoaRegistry(
+                reg_no="農藥進99001",
+                permit_type="農藥進",
+                permit_number="99001",
+                chinese_name="示範殺菌劑",
+                english_name="DEMOFUNGIN",
+                company_name="示範農化股份有限公司",
+                raw_core_json={"synthetic_demo": True},
+                fetched_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            )
+            mock_session.get.return_value = demo_moa
+            demo_resp = await client.get("/api/registry/農藥進99001")
+            assert demo_resp.status_code == 200
+            assert demo_resp.json()["reg_no"] == "農藥進99001"
+            assert demo_resp.json()["company_name"] == "示範農化股份有限公司"
+            assert demo_resp.json()["stale"] is False
+            mock_session.get.return_value = None
+
             async def _unavail(s, h, b, reg):
                 raise MoaUnavailableError("down")
 
@@ -350,16 +369,17 @@ async def test_copilot_audit_route_errors_and_seed(
             monkeypatch.setattr("app.api.routes_copilot.run_compliance_audit", _api_err)
             assert (await client.post("/api/copilot/audit/農藥進03225")).status_code == 502
 
-    # Verify seed_sample_data inserts MOA + 4 Documents + DocumentClauses idempotently
+    # Verify seed_sample_data inserts public_demo company + MOA + 4 Documents + DocumentClauses idempotently
     seed_session = AsyncMock()
     seed_session.add = MagicMock()
     seed_session.execute.side_effect = [
+        MagicMock(),  # public_demo Company insert
         MagicMock(),  # MOA insert
         MagicMock(scalar_one_or_none=MagicMock(return_value=None)),  # existing baseline check
-        MagicMock(scalar_one_or_none=MagicMock(return_value="seed_label_03225")),
-        MagicMock(scalar_one_or_none=MagicMock(return_value="seed_msds_03225_v4")),
-        MagicMock(scalar_one_or_none=MagicMock(return_value="seed_cert_03225")),
-        MagicMock(scalar_one_or_none=MagicMock(return_value="seed_letter_115")),
+        MagicMock(scalar_one_or_none=MagicMock(return_value="seed_label_99001")),
+        MagicMock(scalar_one_or_none=MagicMock(return_value="seed_msds_99001_v4")),
+        MagicMock(scalar_one_or_none=MagicMock(return_value="seed_cert_99001")),
+        MagicMock(scalar_one_or_none=MagicMock(return_value="seed_letter_99001")),
         MagicMock(),  # AuditReportCache demo insert
     ]
     await seed_sample_data(seed_session)

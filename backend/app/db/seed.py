@@ -7,7 +7,15 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import AuditReportCache, Document, DocumentClause, MoaRegistry
+from app.db.models import (
+    PUBLIC_DEMO_COMPANY_ID,
+    PUBLIC_DEMO_REG_NO,
+    AuditReportCache,
+    Company,
+    Document,
+    DocumentClause,
+    MoaRegistry,
+)
 from app.schemas.report import ComplianceAuditReport, ComplianceChecklistItem
 from app.schemas.extraction import (
     AuthorizedProductItem,
@@ -30,25 +38,36 @@ def _gf(verbatim: str, value: str | None = None, page: int = 1) -> GroundedField
 
 
 async def seed_sample_data(session: AsyncSession) -> None:
-    """Insert deterministic sample MOA registry, document, and clause fixtures idempotently."""
+    """Insert deterministic synthetic public_demo (農藥進99001) fixtures idempotently."""
     try:
+        await session.execute(
+            insert(Company)
+            .values(company_id=PUBLIC_DEMO_COMPANY_ID, name="Public Demo")
+            .on_conflict_do_nothing(index_elements=["company_id"])
+        )
+
         moa_stmt = (
             insert(MoaRegistry)
             .values(
-                reg_no="農藥進03225",
+                reg_no=PUBLIC_DEMO_REG_NO,
                 permit_type="農藥進",
-                permit_number="03225",
-                chinese_name="美氟綜",
-                pesticide_code="I249",
-                english_name="METAFLUMIZONE",
-                brand_name="Alverde",
-                company_name="台灣巴斯夫股份有限公司",
-                foreign_manufacturer="BASF Agricultural Solutions Brasil Ltda.",
+                permit_number="99001",
+                chinese_name="示範殺菌劑",
+                pesticide_code="F999",
+                english_name="DEMOFUNGIN",
+                brand_name="DemoShield",
+                company_name="示範農化股份有限公司",
+                foreign_manufacturer="Demo AgroChem Corp. (Old Plant)",
                 formulation="SC",
                 content_pct="22%",
-                valid_until_roc="118/06/30",
+                valid_until_roc="120/06/30",
                 revocation_status=None,
-                raw_core_json={"許可證字": "農藥進", "許可證號": "03225", "中文名稱": "美氟綜"},
+                raw_core_json={
+                    "許可證字": "農藥進",
+                    "許可證號": "99001",
+                    "中文名稱": "示範殺菌劑",
+                    "synthetic_demo": True,
+                },
             )
             .on_conflict_do_nothing(index_elements=["reg_no"])
         )
@@ -57,7 +76,8 @@ async def seed_sample_data(session: AsyncSession) -> None:
         existing_baseline = (
             await session.execute(
                 select(Document.doc_id).where(
-                    Document.reg_no == "農藥進03225",
+                    Document.company_id == PUBLIC_DEMO_COMPANY_ID,
+                    Document.reg_no == PUBLIC_DEMO_REG_NO,
                     Document.doc_type == "label",
                     Document.is_active_baseline.is_(True),
                 )
@@ -65,17 +85,17 @@ async def seed_sample_data(session: AsyncSession) -> None:
         ).scalar_one_or_none()
 
         label_model = ProductLabelExtraction(
-            reg_no=_gf("農藥進03225"),
-            common_name=_gf("美氟綜"),
+            reg_no=_gf(PUBLIC_DEMO_REG_NO),
+            common_name=_gf("示範殺菌劑"),
             formulation_type=_gf("SC"),
             dosage_and_content=_gf("22%"),
-            foreign_manufacturer_name=_gf("Old Factory Ltd."),
-            local_permit_holder_name=_gf("台灣巴斯夫股份有限公司"),
+            foreign_manufacturer_name=_gf("Demo AgroChem Corp. (Old Plant)"),
+            local_permit_holder_name=_gf("示範農化股份有限公司"),
             ghs_pictograms=[_gf("GHS07", "GHS07")],
             hazard_statements=[_gf("H320造成眼睛刺激", "H320")],
         )
         msds_model = MsdsExtraction(
-            common_name=_gf("Metaflumizone"),
+            common_name=_gf("Demofungin"),
             formulation_type=_gf("SC"),
             dosage_and_content=_gf("22%"),
             issued_version=_gf("Version 4.0", "4.0"),
@@ -84,21 +104,21 @@ async def seed_sample_data(session: AsyncSession) -> None:
         )
         cert_model = NotarizedCertExtraction(
             cert_subtype=_gf("Free Sale", "free_sale"),
-            products=[AuthorizedProductItem(common_name=_gf("Metaflumizone"))],
-            certified_factory_name=_gf("BASF Agricultural Solutions Brasil Ltda."),
+            products=[AuthorizedProductItem(common_name=_gf("Demofungin"))],
+            certified_factory_name=_gf("Demo AgroChem GmbH (New Plant)"),
         )
         letter_model = OfficialLetterExtraction(
-            issue_number=_gf("防檢二字第1150001234號"),
-            affected_reg_nos=[_gf("農藥進字第03225號", "農藥進03225")],
-            chinese_common_names=[_gf("美氟綜")],
+            issue_number=_gf("防檢示範字第1150009901號"),
+            affected_reg_nos=[_gf("農藥進字第99001號", PUBLIC_DEMO_REG_NO)],
+            chinese_common_names=[_gf("示範殺菌劑")],
             mandate_clauses=[_gf("請於標籤加註水生生物警語")],
         )
 
         docs = [
-            ("seed_label_03225", "alverde_label_sample.webp", "label", "農藥進03225", "美氟綜", existing_baseline is None, 1, label_model),
-            ("seed_msds_03225_v4", "alverde_msds_v4.pdf", "msds", "農藥進03225", "Metaflumizone", False, 12, msds_model),
-            ("seed_cert_03225", "cor_2026_03225.pdf", "change_cert", "農藥進03225", "Metaflumizone", False, 2, cert_model),
-            ("seed_letter_115", "aphia_letter_115.pdf", "official_letter", "農藥進03225", "美氟綜", False, 1, letter_model),
+            ("seed_label_99001", "demo_label_99001.webp", "label", PUBLIC_DEMO_REG_NO, "示範殺菌劑", existing_baseline is None, 1, label_model),
+            ("seed_msds_99001_v4", "demo_msds_99001_v4.pdf", "msds", PUBLIC_DEMO_REG_NO, "Demofungin", False, 12, msds_model),
+            ("seed_cert_99001", "demo_cor_99001.pdf", "change_cert", PUBLIC_DEMO_REG_NO, "Demofungin", False, 2, cert_model),
+            ("seed_letter_99001", "demo_aphia_letter_99001.pdf", "official_letter", PUBLIC_DEMO_REG_NO, "示範殺菌劑", False, 1, letter_model),
         ]
 
         for doc_id, filename, doc_type, reg_no, common_name, is_baseline, page_count, model in docs:
@@ -106,6 +126,7 @@ async def seed_sample_data(session: AsyncSession) -> None:
                 insert(Document)
                 .values(
                     doc_id=doc_id,
+                    company_id=PUBLIC_DEMO_COMPANY_ID,
                     filename=filename,
                     doc_type=doc_type,
                     reg_no=reg_no,
@@ -128,29 +149,30 @@ async def seed_sample_data(session: AsyncSession) -> None:
                     session.add(DocumentClause(**clause_dict))
 
         demo_report = ComplianceAuditReport(
-            reg_no="農藥進03225",
-            product_name_zh="美氟綜",
-            product_name_en="METAFLUMIZONE",
+            reg_no=PUBLIC_DEMO_REG_NO,
+            product_name_zh="示範殺菌劑",
+            product_name_en="DEMOFUNGIN",
             overall_status="pending_moa_approval",
-            executive_summary_zh="此為公開展示範例（農藥進03225 美氟綜）：變更證明文件之原製造廠與現行標示及農業部登記不一致，建議取得變更核准後再更新標籤。",
-            executive_summary_en="Public demo fixture (農藥進03225 METAFLUMIZONE): factory change certificate differs from current label and MOA registry; update label after MOA approval.",
+            executive_summary_zh="此為公開展示範例（農藥進99001 示範殺菌劑）：變更證明文件之原製造廠與現行標示及農業部登記不一致，建議取得變更核准後再更新標籤。",
+            executive_summary_en="Public demo fixture (農藥進99001 DEMOFUNGIN): factory change certificate differs from current label and MOA registry; update label after MOA approval.",
             checklist_items=[
                 ComplianceChecklistItem(
                     field_name="國外原製造廠名稱",
                     category="factory_source_change",
                     action_status="pending_moa_approval",
-                    current_label_value="BASF Agricultural Solutions Brasil Ltda.",
-                    recommended_new_value="BASF SE (Ludwigshafen)",
-                    rationale="Seeded demo diff between baseline label and uploaded change certificate.",
+                    current_label_value="Demo AgroChem Corp. (Old Plant)",
+                    recommended_new_value="Demo AgroChem GmbH (New Plant)",
+                    rationale="Seeded synthetic demo diff between baseline label and uploaded change certificate.",
                 )
             ],
-            msds_doc_id_used="seed_msds_03225",
+            msds_doc_id_used="seed_msds_99001_v4",
         )
         await session.execute(
             insert(AuditReportCache)
             .values(
-                reg_no="農藥進03225",
-                cache_key="seed_demo_03225",
+                company_id=PUBLIC_DEMO_COMPANY_ID,
+                reg_no=PUBLIC_DEMO_REG_NO,
+                cache_key="seed_demo_99001",
                 report_json=demo_report.model_dump(),
             )
             .on_conflict_do_nothing(index_elements=["cache_key"])

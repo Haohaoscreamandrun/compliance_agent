@@ -23,6 +23,7 @@ from app.config import Settings
 from app.db.models import (
     DEFAULT_COMPANY_ID,
     PUBLIC_DEMO_COMPANY_ID,
+    PUBLIC_DEMO_REG_NO,
     AuditReportCache,
     Document,
     EntityAlias,
@@ -38,7 +39,6 @@ from app.services.parser import GeminiParseError
 from app.services.tools import CopilotToolset
 
 router = APIRouter(prefix="/api/copilot", tags=["copilot"])
-PUBLIC_DEMO_REG_NO = "農藥進99001"
 
 
 @router.get("/audit/{reg_no}", response_model=ComplianceAuditReport)
