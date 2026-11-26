@@ -26,6 +26,7 @@ from app.api.deps import (
 from app.config import Settings
 from app.db.models import (
     PUBLIC_DEMO_COMPANY_ID,
+    PUBLIC_DEMO_REG_NO,
     VALID_DOC_TYPES,
     Document,
     DocumentClause,
@@ -147,6 +148,16 @@ async def upload_document(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    if (
+        user.company_id == PUBLIC_DEMO_COMPANY_ID
+        and explicit_reg is not None
+        and explicit_reg != PUBLIC_DEMO_REG_NO
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Public demo workspace only permits '{PUBLIC_DEMO_REG_NO}' (or blank reg_no for shared multi-product files).",
+        )
+
     client = request.app.state.genai_client
     if client is None:
         raise HTTPException(status_code=503, detail="Gemini client is not configured.")
@@ -164,6 +175,7 @@ async def upload_document(
     requested_vol = (volume_tag or "").strip()[:64] if doc_type == "label" else ""
     if not force_reparse:
         cached_stmt = select(Document).where(
+            Document.company_id == user.company_id,
             Document.content_sha256 == content_sha256,
             Document.doc_type == doc_type,
             Document.reg_no.is_not_distinct_from(explicit_reg),
@@ -235,6 +247,15 @@ async def upload_document(
                 detail=f"Uploaded document permit '{extracted_reg}' does not match provided reg_no '{explicit_reg}'.",
             )
         resolved_reg = explicit_reg or extracted_reg
+        if (
+            user.company_id == PUBLIC_DEMO_COMPANY_ID
+            and resolved_reg is not None
+            and resolved_reg != PUBLIC_DEMO_REG_NO
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Public demo workspace only permits '{PUBLIC_DEMO_REG_NO}' (extracted '{resolved_reg}').",
+            )
         cert_sub_gf = getattr(parse_res.extraction, "cert_subtype", None)
         if doc_type == "change_cert" and cert_sub_gf and cert_sub_gf.value == "other" and not resolved_reg:
             raise HTTPException(

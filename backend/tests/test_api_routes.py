@@ -97,7 +97,10 @@ async def test_health_and_registry_routes(tmp_path: Path, monkeypatch: pytest.Mo
             monkeypatch.setattr("app.api.routes_registry.get_registry_snapshot", _not_found)
             assert (await client.get("/api/registry/農藥進99999")).status_code == 404
 
-            # Seeded synthetic PUBLIC_DEMO_REG_NO serves cached MoaRegistry without calling live MOA
+            # Real moa_client.get_registry_snapshot serves cached synthetic PUBLIC_DEMO_REG_NO without hitting live MOA
+            from app.services.moa_client import get_registry_snapshot as real_get_registry_snapshot
+
+            monkeypatch.setattr("app.api.routes_registry.get_registry_snapshot", real_get_registry_snapshot)
             demo_moa = MoaRegistry(
                 reg_no="農藥進99001",
                 permit_type="農藥進",

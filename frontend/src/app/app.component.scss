@@ -80,6 +80,45 @@
   }
 }
 
+.identity-pill-demo {
+  border-color: #d97706;
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.14);
+}
+
+.workspace-switch-btn {
+  font-size: 0.76rem;
+  line-height: 1.2;
+  min-block-size: 28px;
+  padding-inline: 0.65rem;
+}
+
+.public-demo-banner {
+  position: relative;
+  z-index: 9;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding: 0.55rem 1rem;
+  font-size: 0.84rem;
+  color: #78350f;
+  background: #fef3c7;
+  border-block-end: 1px solid #f59e0b;
+
+  code {
+    font-family: var(--font-mono);
+    font-weight: 600;
+  }
+}
+
+:host-context([data-theme='dark']) .public-demo-banner {
+  color: #fde68a;
+  background: #3b2406;
+  border-block-end-color: #d97706;
+}
+
 .toolbar-actions {
   display: flex;
   flex-wrap: wrap;

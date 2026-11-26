@@ -43,6 +43,7 @@ class MeResponse(BaseModel):
     company_id: str | None = None
     company_name: str | None = None
     role: str | None = None
+    can_manage_public_demo: bool = False
     pending_request: PendingAccessRequestOut | None = None
 
 
@@ -88,6 +89,7 @@ async def get_me(
             company_id=user.company_id,
             company_name=company_name or user.company_id,
             role=user.role,
+            can_manage_public_demo=user.can_manage_public_demo,
         )
 
     email = get_verified_email(request)

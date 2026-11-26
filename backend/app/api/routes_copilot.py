@@ -159,6 +159,12 @@ async def audit_permit(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    if user.company_id == PUBLIC_DEMO_COMPANY_ID and canon_reg != PUBLIC_DEMO_REG_NO:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Public demo workspace only permits auditing '{PUBLIC_DEMO_REG_NO}'.",
+        )
+
     alias_res = await session.execute(
         select(EntityAlias.zh_name, EntityAlias.en_name).where(
             EntityAlias.company_id == user.company_id,

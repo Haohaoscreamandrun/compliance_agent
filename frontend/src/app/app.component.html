@@ -10,10 +10,20 @@
       <small lang="en" class="brand-sub">Compliance Copilot</small>
       @if (me(); as userInfo) {
         @if (userInfo.email) {
-          <span class="identity-pill">
+          <span class="identity-pill" [class.identity-pill-demo]="isPublicDemoMode()">
             <span class="mono">{{ userInfo.email }}</span>
-            <span>· {{ userInfo.company_name || '未指派公司' }}</span>
+            <span>· {{ isPublicDemoMode() ? 'Public Demo (公開編輯)' : (userInfo.company_name || '未指派公司') }}</span>
           </span>
+        }
+        @if (canManagePublicDemo()) {
+          <button
+            mat-stroked-button
+            type="button"
+            class="workspace-switch-btn"
+            (click)="togglePublicDemoWorkspace()"
+          >
+            {{ isPublicDemoMode() ? '返回 Default Workspace' : '管理公開示範' }}
+          </button>
         }
       }
     </span>
@@ -82,6 +92,19 @@
     </button>
   </div>
 </mat-toolbar>
+
+@if (isPublicDemoMode()) {
+  <div class="public-demo-banner" role="alert">
+    <span>
+      <strong>公開示範編輯模式 (public_demo)：</strong>
+      在此模式下上傳的文件與頁面影像將對所有未登入訪客公開，且僅允許
+      <code>農藥進99001</code>（或空白多產品文件）。重新整理頁面會自動切回 Default Workspace。
+    </span>
+    <button mat-stroked-button type="button" (click)="togglePublicDemoWorkspace()">
+      返回 Default Workspace
+    </button>
+  </div>
+}
 
 <mat-sidenav-container class="app-shell">
   <mat-sidenav

@@ -141,6 +141,7 @@ export interface MeResponse {
   company_id: string | null;
   company_name: string | null;
   role: string | null;
+  can_manage_public_demo?: boolean;
   pending_request: PendingAccessRequest | null;
 }
 

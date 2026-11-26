@@ -1,5 +1,5 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
-import { inject, Injectable } from '@angular/core';
+import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
+import { inject, Injectable, signal } from '@angular/core';
 import { Observable } from 'rxjs';
 
 import {
@@ -26,10 +26,25 @@ export interface DocumentFilterParams {
   offset?: number;
 }
 
+export type ActiveWorkspaceId = 'default' | 'public_demo';
+
 @Injectable({ providedIn: 'root' })
 export class ComplianceApiService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = '/api';
+
+  // In-memory only: resets back to 'default' on page reload so admins never stay in public_demo accidentally.
+  readonly workspaceCompanyId = signal<ActiveWorkspaceId>('default');
+
+  setWorkspaceCompanyId(workspace: ActiveWorkspaceId): void {
+    this.workspaceCompanyId.set(workspace);
+  }
+
+  private workspaceHeaders(): HttpHeaders | undefined {
+    return this.workspaceCompanyId() === 'public_demo'
+      ? new HttpHeaders({ 'X-Workspace-Company-Id': 'public_demo' })
+      : undefined;
+  }
 
   lookupRegistry(regNo: string): Observable<RegistryLookupResponse> {
     return this.http.get<RegistryLookupResponse>(
@@ -82,7 +97,10 @@ export class ComplianceApiService {
     if (filters.offset !== undefined) {
       params = params.set('offset', filters.offset);
     }
-    return this.http.get<DocumentSummary[]>(`${this.baseUrl}/documents`, { params });
+    return this.http.get<DocumentSummary[]>(`${this.baseUrl}/documents`, {
+      params,
+      headers: this.workspaceHeaders(),
+    });
   }
 
   checkDocumentExists(
@@ -96,7 +114,7 @@ export class ComplianceApiService {
     }
     return this.http.get<{ exists: boolean; doc_id: string | null }>(
       `${this.baseUrl}/documents/exists`,
-      { params },
+      { params, headers: this.workspaceHeaders() },
     );
   }
 
@@ -125,13 +143,16 @@ export class ComplianceApiService {
     if (options.force_reparse) {
       formData.append('force_reparse', 'true');
     }
-    return this.http.post<DocumentUploadResponse>(`${this.baseUrl}/documents/upload`, formData);
+    return this.http.post<DocumentUploadResponse>(`${this.baseUrl}/documents/upload`, formData, {
+      headers: this.workspaceHeaders(),
+    });
   }
 
   toggleBaseline(docId: string, isActiveBaseline: boolean): Observable<DocumentSummary> {
     return this.http.patch<DocumentSummary>(
       `${this.baseUrl}/documents/${encodeURIComponent(docId)}/baseline`,
       { is_active_baseline: isActiveBaseline },
+      { headers: this.workspaceHeaders() },
     );
   }
 
@@ -142,6 +163,7 @@ export class ComplianceApiService {
   getCachedAuditReport(regNo: string): Observable<ComplianceAuditReport> {
     return this.http.get<ComplianceAuditReport>(
       `${this.baseUrl}/copilot/audit/${encodeURIComponent(regNo.trim())}`,
+      { headers: this.workspaceHeaders() },
     );
   }
 
@@ -150,24 +172,32 @@ export class ComplianceApiService {
     return this.http.post<ComplianceAuditReport>(
       `${this.baseUrl}/copilot/audit/${encodeURIComponent(regNo.trim())}`,
       {},
-      { params },
+      { params, headers: this.workspaceHeaders() },
     );
   }
 
   listEntityAliases(): Observable<EntityAlias[]> {
-    return this.http.get<EntityAlias[]>(`${this.baseUrl}/entity-aliases`);
-  }
-
-  upsertEntityAlias(zhName: string, enName: string, confirmed: boolean): Observable<EntityAlias> {
-    return this.http.post<EntityAlias>(`${this.baseUrl}/entity-aliases`, {
-      zh_name: zhName,
-      en_name: enName,
-      confirmed,
+    return this.http.get<EntityAlias[]>(`${this.baseUrl}/entity-aliases`, {
+      headers: this.workspaceHeaders(),
     });
   }
 
+  upsertEntityAlias(zhName: string, enName: string, confirmed: boolean): Observable<EntityAlias> {
+    return this.http.post<EntityAlias>(
+      `${this.baseUrl}/entity-aliases`,
+      {
+        zh_name: zhName,
+        en_name: enName,
+        confirmed,
+      },
+      { headers: this.workspaceHeaders() },
+    );
+  }
+
   getMe(): Observable<MeResponse> {
-    return this.http.get<MeResponse>(`${this.baseUrl}/me`);
+    return this.http.get<MeResponse>(`${this.baseUrl}/me`, {
+      headers: this.workspaceHeaders(),
+    });
   }
 
   submitAccessRequest(
