@@ -227,6 +227,7 @@ describe('AppComponent', () => {
       role: null,
       pending_request: null,
     });
+    httpMock.expectOne('/api/documents?limit=50').flush([]);
     fixture.detectChanges();
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('申請加入公司');
 

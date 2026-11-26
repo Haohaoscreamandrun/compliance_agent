@@ -76,17 +76,40 @@ async def test_documents_require_allowlisted_company_user_and_isolate_pages(tmp_
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        # 1. Missing X-Auth-User-Email when require_cf_access=True -> 401
-        resp_unauth = await client.get("/api/documents")
-        assert resp_unauth.status_code == 401
+        # 1. Unauthenticated GET /api/documents returns public_demo docs; private reg_no -> 401
+        session.execute.return_value = MagicMock(
+            scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))
+        )
+        resp_unauth_pub = await client.get("/api/documents")
+        assert resp_unauth_pub.status_code == 200
+        assert PUBLIC_DEMO_COMPANY_ID in str(session.execute.call_args.args[0].compile().params.values())
 
-        # 2. Email not in company_users allowlist -> 403
-        session.execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+        resp_unauth_priv = await client.get("/api/documents?reg_no=農藥進00569")
+        assert resp_unauth_priv.status_code == 401
+
+        # 2. Email not in company_users allowlist: private reg_no -> 403, general listing -> public_demo (200)
+        session.execute.side_effect = [
+            MagicMock(scalar_one_or_none=MagicMock(return_value=None)),
+        ]
         resp_forbidden = await client.get(
-            "/api/documents",
+            "/api/documents?reg_no=農藥進00569",
             headers={"x-auth-user-email": "stranger@gmail.com"},
         )
         assert resp_forbidden.status_code == 403
+
+        # 2b. Authenticated company user's general listing includes both own company and public_demo
+        user_a = CompanyUser(email="alice@compa.com", company_id="comp_a", role="member")
+        session.execute.side_effect = [
+            MagicMock(scalar_one_or_none=MagicMock(return_value=user_a)),
+            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))),
+        ]
+        resp_company_list = await client.get(
+            "/api/documents",
+            headers={"x-auth-user-email": "alice@compa.com"},
+        )
+        assert resp_company_list.status_code == 200
+        list_params = list(session.execute.call_args_list[-1].args[0].compile().params.values())
+        assert any("comp_a" in str(v) and PUBLIC_DEMO_COMPANY_ID in str(v) for v in list_params)
 
         # 3. Company B cannot read Company A's page image -> 404
         user_b = CompanyUser(email="bob@compb.com", company_id="comp_b", role="member")
