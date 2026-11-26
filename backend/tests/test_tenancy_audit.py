@@ -100,3 +100,47 @@ async def test_tenancy_gates_on_copilot_aliases_and_registry_writes(tmp_path: Pa
                 headers={"x-auth-user-email": "stranger@gmail.com"},
             )
         ).status_code == 403
+
+
+async def test_public_demo_cached_audit_always_reads_public_demo_for_default_user(
+    tmp_path: Path,
+) -> None:
+    app = create_app(
+        Settings(_env_file=None, storage_dir=tmp_path, require_cf_access=True),
+        init_db=False,
+    )
+    session = AsyncMock()
+    default_user = CompanyUser(email="owner@example.com", company_id="default", role="admin")
+    demo_report = AuditReportCache(
+        company_id=PUBLIC_DEMO_COMPANY_ID,
+        reg_no="農藥進99001",
+        cache_key="fresh_demo_99001",
+        report_json={
+            "reg_no": "農藥進99001",
+            "product_name_zh": "示範殺菌劑",
+            "product_name_en": "DEMOFUNGIN",
+            "overall_status": "pending_moa_approval",
+            "executive_summary_zh": "fresh",
+            "executive_summary_en": "fresh",
+            "checklist_items": [],
+        },
+        created_at=datetime.now(timezone.utc),
+    )
+    session.execute.side_effect = [
+        MagicMock(scalar_one_or_none=MagicMock(return_value=default_user)),
+        MagicMock(scalar_one_or_none=MagicMock(return_value=demo_report)),
+    ]
+    app.dependency_overrides[get_db_session] = lambda: session
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get(
+            "/api/copilot/audit/農藥進99001",
+            headers={"x-auth-user-email": "owner@example.com"},
+        )
+    assert resp.status_code == 200
+    assert resp.json()["overall_status"] == "pending_moa_approval"
+    cache_stmt = session.execute.call_args_list[1].args[0]
+    compiled = cache_stmt.compile()
+    assert PUBLIC_DEMO_COMPANY_ID in compiled.params.values()
+    assert "default" not in compiled.params.values()
