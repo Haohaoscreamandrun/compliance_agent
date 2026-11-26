@@ -205,31 +205,9 @@ export class AppComponent implements OnInit {
   tryDemoAudit(): void {
     const demoReg = '農藥進99001';
     this.regNo.set(demoReg);
-    this.auditLoading.set(true);
-    this.auditError.set(null);
-    this.baselinesLoaded.set(false);
-    this.api
-      .lookupRegistry(demoReg)
-      .pipe(
-        catchError(() => of(null)),
-        takeUntilDestroyed(this.destroyRef),
-      )
-      .subscribe((moa) => {
-        if (moa) this.moaSnapshot.set(moa);
-      });
-    this.api
-      .getCachedAuditReport(demoReg)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (report) => {
-          this.auditReport.set(report);
-          this.auditLoading.set(false);
-        },
-        error: (err) => {
-          this.auditError.set(extractApiErrorMessage(err, '載入公開示範審查失敗'));
-          this.auditLoading.set(false);
-        },
-      });
+    this.snackBar.open('已填入示範許可證 農藥進99001，請點選「載入基準文件」繼續體驗', '關閉', {
+      duration: 4000,
+    });
   }
 
   openJoinCompanyDialog(): void {
@@ -322,17 +300,19 @@ export class AppComponent implements OnInit {
           this.aphiaSnapshot.set(aphia);
           this.evalDateInput.set(aphia?.evaluation_submitted_date ?? '');
           this.baselinesLoading.set(false);
-          this.api
-            .getCachedAuditReport(target)
-            .pipe(
-              catchError(() => of(null)),
-              takeUntilDestroyed(this.destroyRef),
-            )
-            .subscribe((cached) => {
-              if (cached) {
-                this.auditReport.set(cached);
-              }
-            });
+          if (target !== '農藥進99001') {
+            this.api
+              .getCachedAuditReport(target)
+              .pipe(
+                catchError(() => of(null)),
+                takeUntilDestroyed(this.destroyRef),
+              )
+              .subscribe((cached) => {
+                if (cached) {
+                  this.auditReport.set(cached);
+                }
+              });
+          }
         },
         error: (err) => {
           this.baselinesError.set(extractApiErrorMessage(err, '載入基準文件失敗'));
@@ -348,15 +328,20 @@ export class AppComponent implements OnInit {
     this.auditReport.set(null);
     this.auditLoading.set(true);
     this.auditError.set(null);
-    this.auditSub = this.api
-      .runComplianceAudit(target, forceRefresh)
+    const isReadOnlyPublicDemo = target === '農藥進99001' && !this.isPublicDemoMode();
+    const audit$ = isReadOnlyPublicDemo
+      ? this.api.getCachedAuditReport(target)
+      : this.api.runComplianceAudit(target, forceRefresh);
+    this.auditSub = audit$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (report) => {
           this.auditReport.set(report);
           this.auditLoading.set(false);
-          this.loadDocuments();
-          this.promptUnconfirmedBilingualEntity(report);
+          if (!isReadOnlyPublicDemo) {
+            this.loadDocuments();
+            this.promptUnconfirmedBilingualEntity(report);
+          }
         },
         error: (err) => {
           this.auditError.set(

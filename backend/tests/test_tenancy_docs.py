@@ -225,3 +225,51 @@ async def test_public_demo_workspace_switcher_authorization_and_guardrails(tmp_p
                 },
             )
             assert resp_real_audit.status_code == 400
+
+            # 5. Unauthenticated visitor can list public_demo docs for 農藥進99001 only
+            demo_doc = Document(
+                doc_id="seed_label_99001",
+                company_id=PUBLIC_DEMO_COMPANY_ID,
+                filename="demo_label_99001.webp",
+                doc_type="label",
+                reg_no="農藥進99001",
+                is_active_baseline=True,
+                page_count=1,
+                extracted_data={},
+                uploaded_at=datetime.now(timezone.utc),
+            )
+            session.execute.side_effect = None
+            session.execute.return_value = MagicMock(
+                scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[demo_doc])))
+            )
+            resp_pub_docs = await client.get("/api/documents?reg_no=農藥進99001")
+            assert resp_pub_docs.status_code == 200
+            assert resp_pub_docs.json()[0]["doc_id"] == "seed_label_99001"
+
+            resp_priv_docs = await client.get("/api/documents?reg_no=農藥進00569")
+            assert resp_priv_docs.status_code == 401
+
+
+async def test_synthetic_demo_aphia_cache_preserved_on_force_refresh() -> None:
+    from app.db.models import AphiaQueryCache
+    from app.services.aphia_client import lookup_aphia_for_tokens
+
+    synthetic_row = AphiaQueryCache(
+        query_key="test_key",
+        keywords_json=["示範殺菌劑", "DEMOFUNGIN"],
+        result_json={
+            "synthetic_demo": True,
+            "carcinogen_matches": [{"source_kind": "carcinogen", "source_key": "k1", "title": "demo"}],
+            "assessment_matches": [],
+            "latest_pre_notice": None,
+        },
+        fetched_at=datetime(2020, 1, 1, tzinfo=timezone.utc),  # older than 6h TTL
+    )
+    session = AsyncMock()
+    session.execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=synthetic_row))
+    http = AsyncMock()
+
+    res = await lookup_aphia_for_tokens(session, http, ["示範殺菌劑", "DEMOFUNGIN"], force_refresh=True)
+    assert res["stale"] is False
+    assert len(res["carcinogen_matches"]) == 1
+    http.get.assert_not_called()

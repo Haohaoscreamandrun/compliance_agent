@@ -372,7 +372,7 @@ async def test_copilot_audit_route_errors_and_seed(
             monkeypatch.setattr("app.api.routes_copilot.run_compliance_audit", _api_err)
             assert (await client.post("/api/copilot/audit/農藥進03225")).status_code == 502
 
-    # Verify seed_sample_data inserts public_demo company + MOA + 4 Documents + DocumentClauses idempotently
+    # Verify seed_sample_data inserts public_demo company + MOA + 4 Documents + Audit + APHIA fixtures idempotently
     seed_session = AsyncMock()
     seed_session.add = MagicMock()
     seed_session.execute.side_effect = [
@@ -384,6 +384,8 @@ async def test_copilot_audit_route_errors_and_seed(
         MagicMock(scalar_one_or_none=MagicMock(return_value="seed_cert_99001")),
         MagicMock(scalar_one_or_none=MagicMock(return_value="seed_letter_99001")),
         MagicMock(),  # AuditReportCache demo insert
+        MagicMock(),  # AphiaRecord demo carcinogen insert
+        MagicMock(),  # AphiaQueryCache demo insert
     ]
     await seed_sample_data(seed_session)
     assert seed_session.add.call_count > 0
