@@ -36,7 +36,8 @@ Do not guess any regulatory facts before running all relevant tools."""
 
 _PHASE2_SYSTEM_PROMPT = """You are synthesizing a Taiwan Agrochemical Label Compliance Audit Report.
 Produce `ComplianceAuditReport` JSON grounded strictly in the provided deterministic diff findings and tool outputs.
-Write concise, accurate `executive_summary_zh` (Traditional Chinese) and `executive_summary_en` (English).
+Write concise, accurate `executive_summary_zh` (natural Traditional Chinese only, no mixed English verbs) and `executive_summary_en` (English).
+Use the provided `overall_status` verbatim when stating the overall compliance status in both summaries, and only mention missing/changed items (do not claim items already present on the label are newly added).
 Preserve every deterministic `field_name`, `category`, `action_status`, and `[doc_id, page, box_2d]` citation verbatim.
 Additionally, if `crop_usage_comparison.moa_approved_usages` is non-empty and `crop_usage_comparison.label_crop_usages` is provided, compare the label's crop-usage table against MOA `approved_usages_json` and emit `checklist_items` with `category="crop_usage_sync"` for:
 1. Wrong numbers (`action_status="must_update"`): mismatched dilution ratio (`稀釋倍數`), dosage per ha (`每公頃使用用藥量`), interval (`施藥間隔`), application count (`施用次數`), or PHI (`安全採收期`). Ground `current_label_citation` to that printed label cell's `{doc_id, page, box_2d, verbatim_quote}`.
@@ -197,8 +198,14 @@ async def run_compliance_audit(
 
     # --- Phase 2: Constrained Decoding into ComplianceAuditReport ---
     crop_evidence = toolset.build_crop_usage_evidence() if hasattr(toolset, "build_crop_usage_evidence") else {}
+    pre_overall = _derive_overall_status(
+        toolset.last_findings,
+        has_label=toolset.has_label,
+        has_moa=toolset.has_moa,
+    )
     evidence_bundle = {
         "reg_no": canon_reg,
+        "overall_status": pre_overall,
         "product_name_zh": toolset.moa_chinese_name or toolset.label_common_name,
         "product_name_en": toolset.moa_english_name,
         "moa_snapshot_stale": toolset.moa_stale,

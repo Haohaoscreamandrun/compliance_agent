@@ -39,6 +39,11 @@ _REG_NO_STRICT = re.compile(r"\A(農藥(?:原進|原製|製|進))字?(?:第)?([0
 _H_CODE_GROUP_RE = re.compile(r"H([234]\d{2})(?:\s*[+/]\s*(\d{3}))+")
 _H_CODE_RE = re.compile(r"(?<![A-Za-z0-9])(H[234]\d{2}[A-Za-z]{0,2})(?![A-Za-z0-9])")
 _EN_SEP_RE = re.compile(r"\s*(?:[+/;]|(?<!\d),(?!\d)|\band\b)\s*", re.IGNORECASE)
+_CAS_NUM_RE = re.compile(r"\b\d{2,7}-\d{2}-\d\b")
+_CAS_CLAUSE_RE = re.compile(r"[\s,;(/]*\bCAS(?:\s*No\.?)?[\s:]*\d{2,7}-\d{2}-\d\)?", re.IGNORECASE)
+_BILINGUAL_PAREN_RE = re.compile(r"^\s*(.+?)\s*[（(]([^()（）]+)[)）]\s*$")
+_CJK_RE = re.compile(r"[\u4e00-\u9fff]")
+_LATIN_RE = re.compile(r"[A-Za-z]")
 _TECH_SUFFIX_RE = re.compile(r"\s+(?:technical|tech\.?|tc)\s*$", re.IGNORECASE)
 _TECH_FORMULATIONS = {"原體", "technical", "tech", "tech.", "tc", "tk"}
 # Official mapping from Taiwan MOA 農藥標準規格準則 第二條附表一 (plus common label variants)
@@ -421,11 +426,15 @@ def _check_product_linkage(
     # MSDS product linkage: common_name, iupac_or_cas_name, formulation_type, dosage_and_content
     if msds is not None and msds_doc_id:
         if msds_cn and (moa_cn or moa_en or label_cn):
-            cn_match = _en_name_tokens(msds_cn) in [_en_name_tokens(n) for n in (moa_cn, label_cn) if n]
+            zh_token_sets = [_en_name_tokens(n) for n in (moa_cn, label_cn) if n]
             en_tokens = _en_name_tokens(msds_cn, strip_tech=is_tech)
             moa_tokens = _en_name_tokens(moa_en, strip_tech=is_tech)
+            cn_match = _en_name_tokens(msds_cn) in zh_token_sets
             en_match = bool(en_tokens and moa_tokens and en_tokens == moa_tokens)
-            if not cn_match and not en_match:
+            bilingual_match = bool(
+                en_tokens and moa_tokens and any(t and en_tokens == (t | moa_tokens) for t in zh_token_sets)
+            )
+            if not cn_match and not en_match and not bilingual_match:
                 findings.append(
                     CascadeDiffFinding(
                         field_name="MSDS 連結驗證 — 有效成分普通名稱",
@@ -445,11 +454,15 @@ def _check_product_linkage(
         msds_iupac = _gf_str(msds.iupac_or_cas_name)
         label_iupac = _gf_str(label.iupac_name if label else None)
         if msds_iupac and label_iupac:
-            cas_re = re.compile(r"\b\d{2,7}-\d{2}-\d\b")
-            msds_cas = set(cas_re.findall(msds_iupac))
-            label_cas = set(cas_re.findall(label_iupac))
+            msds_cas = set(_CAS_NUM_RE.findall(msds_iupac))
+            label_cas = set(_CAS_NUM_RE.findall(label_iupac))
             cas_overlap = bool(msds_cas and label_cas and (msds_cas & label_cas))
-            name_overlap = _en_name_tokens(msds_iupac) == _en_name_tokens(label_iupac)
+            msds_iupac_clean = _CAS_CLAUSE_RE.sub("", msds_iupac)
+            label_iupac_clean = _CAS_CLAUSE_RE.sub("", label_iupac)
+            name_overlap = bool(
+                _en_name_tokens(msds_iupac_clean)
+                and _en_name_tokens(msds_iupac_clean) == _en_name_tokens(label_iupac_clean)
+            )
             if not cas_overlap and not name_overlap:
                 findings.append(
                     CascadeDiffFinding(
@@ -604,7 +617,7 @@ def _check_factory_and_moa(
     if change_cert is not None and cert_doc_id and change_cert.issuing_state_or_country and change_cert.factory_state_or_country:
         issuing_loc = _gf_str(change_cert.issuing_state_or_country)
         factory_loc = _gf_str(change_cert.factory_state_or_country)
-        if issuing_loc.casefold() != factory_loc.casefold():
+        if not _locations_match(issuing_loc, factory_loc):
             findings.append(
                 CascadeDiffFinding(
                     field_name="證明文件簽發地與製造廠所在地差異",
@@ -625,12 +638,47 @@ def _check_factory_and_moa(
             )
 
 
+def _locations_match(a: str, b: str) -> bool:
+    na = _norm_ws(a).casefold()
+    nb = _norm_ws(b).casefold()
+    if na == nb:
+        return True
+    parts_a = [p.strip() for p in na.split(",") if p.strip()]
+    parts_b = [p.strip() for p in nb.split(",") if p.strip()]
+    if len(parts_a) >= 2 and len(parts_b) >= 2 and parts_a[-1] == parts_b[-1]:
+        city_a, city_b = parts_a[0], parts_b[0]
+        if city_a == city_b:
+            return True
+        short, long = (city_a, city_b) if len(city_a) < len(city_b) else (city_b, city_a)
+        if long.startswith(f"{short}-") or long.startswith(f"{short} "):
+            return True
+    return False
+
+
+def _entity_variants(raw: str) -> set[str]:
+    norm = _norm_ws(raw)
+    if not norm:
+        return set()
+    variants = {norm.casefold()}
+    match = _BILINGUAL_PAREN_RE.match(norm)
+    if match:
+        outer, inner = _norm_ws(match.group(1)), _norm_ws(match.group(2))
+        outer_cjk, inner_cjk = bool(_CJK_RE.search(outer)), bool(_CJK_RE.search(inner))
+        outer_lat, inner_lat = bool(_LATIN_RE.search(outer)), bool(_LATIN_RE.search(inner))
+        if (outer_cjk and inner_lat and not inner_cjk) or (inner_cjk and outer_lat and not outer_cjk):
+            variants.add(outer.casefold())
+            variants.add(inner.casefold())
+    return variants
+
+
 def _entities_match(a: str, b: str, aliases: set[tuple[str, str]]) -> bool:
     if a == b:
         return True
-    na = _norm_ws(a).casefold()
-    nb = _norm_ws(b).casefold()
-    return (na, nb) in aliases or (nb, na) in aliases
+    va = _entity_variants(a)
+    vb = _entity_variants(b)
+    if va & vb:
+        return True
+    return any((xa, xb) in aliases or (xb, xa) in aliases for xa in va for xb in vb)
 
 
 def _check_local_entity(
