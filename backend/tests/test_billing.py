@@ -243,3 +243,64 @@ async def test_billing_routes_summary_return_and_admin_topup(tmp_path: Path) -> 
         topup = await client.post("/api/admin/companies/acme/credits", json={"amount_twd": 320})
         assert topup.status_code == 200
         assert topup.json()["credit_balance_usd"] == 12.5
+
+
+@pytest.mark.asyncio
+async def test_newebpay_return_applies_signed_credit_and_redirects(tmp_path: Path) -> None:
+    import json
+    from app.services.billing import _aes_cbc_encrypt_hex, compute_trade_sha
+
+    settings = _billing_settings(tmp_path)
+    app = create_app(settings, init_db=False)
+    account = CompanyBillingAccount(
+        company_id="default",
+        free_calls_remaining=5,
+        credit_balance_micros=0,
+        billing_exempt=False,
+        billing_mode="free_tier",
+    )
+    session = AsyncMock()
+    session.add = MagicMock()
+    session.execute.side_effect = [
+        MagicMock(scalar_one_or_none=MagicMock(return_value=None)),  # external_order_id not yet credited
+        MagicMock(scalar_one_or_none=MagicMock(return_value=account)),
+    ]
+
+    async def _db():
+        yield session
+
+    app.dependency_overrides[get_db_session] = _db
+
+    payload = json.dumps(
+        {
+            "Status": "SUCCESS",
+            "Result": {
+                "MerchantID": settings.newebpay_merchant_id,
+                "MerchantOrderNo": "default_1764300000_abc123",
+                "Amt": 320,
+                "TradeNo": "2611280001",
+                "Email": "owner@example.com",
+            },
+        }
+    )
+    trade_info = _aes_cbc_encrypt_hex(payload, settings.newebpay_hash_key, settings.newebpay_hash_iv)
+    trade_sha = compute_trade_sha(trade_info, settings.newebpay_hash_key, settings.newebpay_hash_iv)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        ret = await client.post(
+            "/api/billing/newebpay/return",
+            data={"TradeInfo": trade_info, "TradeSha": trade_sha},
+            follow_redirects=False,
+        )
+        assert ret.status_code == 303
+        assert ret.headers["location"] == "/?payment=pending"
+        assert account.credit_balance_micros == 10_000_000  # 320 TWD / 32 = 10 USD
+
+        bad = await client.post(
+            "/api/billing/newebpay/return",
+            data={"TradeInfo": trade_info, "TradeSha": "0" * 64},
+            follow_redirects=False,
+        )
+        assert bad.status_code == 303
+        assert account.credit_balance_micros == 10_000_000

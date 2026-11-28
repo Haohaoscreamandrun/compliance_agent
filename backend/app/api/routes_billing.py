@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime
 from typing import Any
 
@@ -27,6 +28,7 @@ from app.services.billing import (
 )
 from app.services.storage import validate_company_id
 
+log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["billing"])
 
 
@@ -189,21 +191,22 @@ async def create_newebpay_checkout(
     return CheckoutResponse(**payload)
 
 
-@router.post("/billing/newebpay/notify")
-async def newebpay_notify_webhook(
-    request: Request,
-    TradeInfo: str = Form(...),
-    TradeSha: str = Form(...),
-    session: AsyncSession = Depends(get_db_session),
-) -> dict[str, str]:
-    settings: Settings = request.app.state.settings
+async def _process_newebpay_callback(
+    settings: Settings,
+    session: AsyncSession,
+    *,
+    trade_info: str,
+    trade_sha: str,
+) -> bool:
+    """Verify TradeSha, decrypt TradeInfo, and apply credit top-up idempotently by MerchantOrderNo."""
     payload = verify_and_decrypt_newebpay_notify(
         settings,
-        trade_info_hex=TradeInfo,
-        trade_sha=TradeSha,
+        trade_info_hex=trade_info,
+        trade_sha=trade_sha,
     )
     if payload.get("Status") != "SUCCESS":
-        return {"status": "ignored"}
+        log.info("NewebPay callback ignored status=%r", payload.get("Status"))
+        return False
 
     result = payload.get("Result") or {}
     merchant_id = str(result.get("MerchantID") or "").strip()
@@ -230,7 +233,7 @@ async def newebpay_notify_webhook(
 
     validate_company_id(company_id)
     amount_micros = twd_to_usd_micros(amt_twd, settings.billing_usd_to_twd)
-    await apply_credit_topup(
+    applied = await apply_credit_topup(
         session,
         company_id=company_id,
         user_email=user_email,
@@ -239,11 +242,51 @@ async def newebpay_notify_webhook(
         charge_source="newebpay_topup",
         metadata_json={"amt_twd": amt_twd, "trade_no": result.get("TradeNo")},
     )
-    return {"status": "ok"}
+    log.info(
+        "NewebPay callback processed order=%s company=%s amt_twd=%d applied=%s",
+        order_no,
+        company_id,
+        amt_twd,
+        applied,
+    )
+    return True
+
+
+@router.post("/billing/newebpay/notify")
+async def newebpay_notify_webhook(
+    request: Request,
+    TradeInfo: str = Form(...),
+    TradeSha: str = Form(...),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, str]:
+    settings: Settings = request.app.state.settings
+    processed = await _process_newebpay_callback(
+        settings,
+        session,
+        trade_info=TradeInfo,
+        trade_sha=TradeSha,
+    )
+    return {"status": "ok" if processed else "ignored"}
 
 
 @router.post("/billing/newebpay/return")
-async def newebpay_return_redirect() -> RedirectResponse:
+async def newebpay_return_redirect(
+    request: Request,
+    TradeInfo: str | None = Form(default=None),
+    TradeSha: str | None = Form(default=None),
+    session: AsyncSession = Depends(get_db_session),
+) -> RedirectResponse:
+    if TradeInfo and TradeSha:
+        settings: Settings = request.app.state.settings
+        try:
+            await _process_newebpay_callback(
+                settings,
+                session,
+                trade_info=TradeInfo,
+                trade_sha=TradeSha,
+            )
+        except Exception as exc:
+            log.warning("NewebPay return callback verification failed: %s", exc)
     return RedirectResponse(url="/?payment=pending", status_code=303)
 
 
