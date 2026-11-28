@@ -304,3 +304,27 @@ async def test_newebpay_return_applies_signed_credit_and_redirects(tmp_path: Pat
         )
         assert bad.status_code == 303
         assert account.credit_balance_micros == 10_000_000
+
+
+def test_newebpay_decrypt_handles_zero_padded_pay2go_notify(tmp_path: Path) -> None:
+    import json
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+    from app.services.billing import compute_trade_sha, verify_and_decrypt_newebpay_notify
+
+    settings = _billing_settings(tmp_path)
+    raw = json.dumps({"Status": "SUCCESS", "Result": {"Amt": 150}}).encode("utf-8")
+    pad_len = (16 - (len(raw) % 16)) % 16 or 16
+    zero_padded = raw + (b"\x00" * pad_len)
+    cipher = Cipher(
+        algorithms.AES(settings.newebpay_hash_key.encode("utf-8")),
+        modes.CBC(settings.newebpay_hash_iv.encode("utf-8")),
+    )
+    enc = cipher.encryptor()
+    trade_info_hex = (enc.update(zero_padded) + enc.finalize()).hex()
+    trade_sha = compute_trade_sha(trade_info_hex, settings.newebpay_hash_key, settings.newebpay_hash_iv)
+
+    parsed = verify_and_decrypt_newebpay_notify(
+        settings, trade_info_hex=trade_info_hex, trade_sha=trade_sha
+    )
+    assert parsed["Status"] == "SUCCESS"
+    assert parsed["Result"]["Amt"] == 150

@@ -238,8 +238,13 @@ def _aes_cbc_decrypt_hex(cipher_hex: str, key: str, iv: str) -> str:
     cipher = Cipher(algorithms.AES(key.encode("utf-8")), modes.CBC(iv.encode("utf-8")))
     dec = cipher.decryptor()
     padded = dec.update(raw) + dec.finalize()
-    unpadder = sym_padding.PKCS7(128).unpadder()
-    return (unpadder.update(padded) + unpadder.finalize()).decode("utf-8")
+    try:
+        unpadder = sym_padding.PKCS7(128).unpadder()
+        plain = unpadder.update(padded) + unpadder.finalize()
+    except ValueError:
+        # NewebPay's pay2go notify gateway may pad with NUL/control bytes; TradeSha is already verified before decrypt.
+        plain = padded.rstrip(bytes(range(0x00, 0x20)))
+    return plain.decode("utf-8")
 
 
 def compute_trade_sha(trade_info_hex: str, key: str, iv: str) -> str:
