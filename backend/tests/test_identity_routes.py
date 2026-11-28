@@ -121,3 +121,19 @@ async def test_admin_onboarding_requires_admin_and_assigns_company(tmp_path: Pat
         assert ok.json()["email"] == "new@gmail.com"
         assert ok.json()["company_id"] == "comp_acme"
         session.commit.assert_awaited()
+
+
+async def test_auth_login_redirect_safety(tmp_path: Path) -> None:
+    app = create_app(Settings(_env_file=None, gemini_api_key="test", storage_dir=tmp_path), init_db=False)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+        follow_redirects=False,
+    ) as client:
+        r_ok = await client.get("/api/auth/login?next=/documents%3Freg%3D1")
+        assert r_ok.status_code == 302
+        assert r_ok.headers["location"] == "/documents?reg=1"
+
+        r_evil = await client.get("/api/auth/login?next=//evil.example/phish")
+        assert r_evil.status_code == 302
+        assert r_evil.headers["location"] == "/"

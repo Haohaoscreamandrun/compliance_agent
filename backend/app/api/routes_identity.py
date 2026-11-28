@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -68,6 +69,15 @@ class AccessRequestOut(BaseModel):
     status: str
     assigned_company_id: str | None = None
     created_at: datetime
+
+
+@router.get("/auth/login")
+async def auth_login_redirect(
+    next: str = Query(default="/", max_length=512),
+) -> RedirectResponse:
+    """Top-level navigation target so Cloudflare Access can issue/renew CF_Authorization and return to the SPA."""
+    safe_next = next if (next.startswith("/") and not next.startswith("//")) else "/"
+    return RedirectResponse(url=safe_next, status_code=302)
 
 
 @router.get("/me", response_model=MeResponse)

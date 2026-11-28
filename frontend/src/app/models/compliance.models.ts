@@ -154,3 +154,47 @@ export interface AccessRequestOut {
   assigned_company_id: string | null;
   created_at: string;
 }
+
+export interface UsageByUserItem {
+  user_email: string;
+  calls: number;
+  total_tokens: number;
+  total_cost_usd: number;
+}
+
+export interface UsageEventOut {
+  id: number;
+  user_email: string;
+  service_name: string;
+  unit: string;
+  quantity: number;
+  reg_no: string | null;
+  cost_usd: number;
+  charge_source: string;
+  created_at: string;
+}
+
+export interface TopupPackOut {
+  pack_id: string;
+  amount_twd: number;
+  label: string;
+  estimated_usd: number;
+}
+
+export interface BillingSummaryResponse {
+  company_id: string;
+  free_calls_remaining: number;
+  free_calls_limit: number;
+  credit_balance_usd: number;
+  billing_exempt: boolean;
+  billing_mode: string;
+  packs: TopupPackOut[];
+  usage_by_user: UsageByUserItem[];
+  recent_events: UsageEventOut[];
+}
+
+export interface CheckoutResponse {
+  mpg_url: string;
+  order_no: string;
+  form_fields: Record<string, string>;
+}
