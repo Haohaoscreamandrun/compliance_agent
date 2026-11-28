@@ -55,6 +55,9 @@ class ParseResult(NamedTuple):
     extraction: BaseModel
     model_used: str
     used_fallback: bool  # True when a 5xx/503 spike forced failover to a fallback model
+    prompt_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
 
 
 def build_page_windows(
@@ -277,12 +280,19 @@ async def parse_document_pages(
 
     window_results: list[BaseModel] = []
     models_used: list[str] = []
+    prompt_tokens = 0
+    output_tokens = 0
+    total_tokens = 0
     for window in windows:
         contents = build_interleaved_contents(doc_type, window)
         response, used_model = await _generate_with_5xx_fallback(
             client, candidate_models, contents, config
         )
         models_used.append(used_model)
+        usage = getattr(response, "usage_metadata", None)
+        prompt_tokens += int(getattr(usage, "prompt_token_count", 0) or 0)
+        output_tokens += int(getattr(usage, "candidates_token_count", 0) or 0)
+        total_tokens += int(getattr(usage, "total_token_count", 0) or 0)
         parsed = _extract_response_json(response, schema_cls)
         valid_pages = {p.page_number for p in window}
         bounded = _filter_to_window_bounds(parsed, schema_cls=schema_cls, valid_pages=valid_pages)
@@ -294,6 +304,9 @@ async def parse_document_pages(
         extraction=merge_window_extractions(schema_cls, window_results),
         model_used=final_model,
         used_fallback=used_fallback,
+        prompt_tokens=prompt_tokens,
+        output_tokens=output_tokens,
+        total_tokens=total_tokens,
     )
 
 
