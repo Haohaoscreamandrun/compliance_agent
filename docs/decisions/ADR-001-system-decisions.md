@@ -112,3 +112,16 @@ Every compliance finding must carry exact spatial provenance (`[doc_id, page, bo
 * **Forfeited Alternatives:**
   * *Inline Crop-Usage Rows in the Main Checklist Table:* Mixing dozens of crop/pest rows into the primary label-field table obscures core registration mismatches; isolating them into `未登載使用範圍` keeps the primary audit scannable.
   * *Per-Citation Button Clusters:* Multiple inline `p.N` buttons per row created visual clutter and forced manual tab-switching between source documents; a single `查看差異` side-by-side view surfaces both compared documents at once.
+
+---
+
+## Decision 8 — Company Credit Pool, 5 Free AI Calls, Multi-Service Ledger & NewebPay Checkout (Component 12)
+
+* **Context:** With `company_id` isolation in place (Component 11), Gemini AI costs must be metered per company and attributed to individual `user_email` callers, with a 5-call free onboarding grant and TWD pay-as-you-go top-ups.
+* **Chosen Architecture:**
+  * **Shared Company Wallet & Extensible Ledger (`company_billing_accounts`, `usage_ledger`, `004_billing_usage.py`):** Each company holds one shared pool (`free_calls_remaining = 5`, `credit_balance_micros` in USD micros `1e-6`, `billing_exempt`), while `usage_ledger` records every call with `service_name`, `unit`, `quantity`, `metadata_json`, `cost_micros`, and `user_email` so future paid services can share the same wallet.
+  * **Successful-AI-Only Metering (`billing.py`, `parser.py`, `copilot.py`):** Only non-cached `POST /api/documents/upload` and `POST /api/copilot/audit/{reg_no}` calls that actually invoke Gemini and succeed decrement `free_calls_remaining` or deduct `token_cost × 1.5×`. Admins (`role == 'admin'`) and `billing_exempt` companies bypass `402` paywalls while still logging `charge_source='admin_exempt'`.
+  * **NewebPay (藍新金流) MPG Hosted Checkout (`routes_billing.py`, `src/worker.ts`):** Fixed TWD packs (`NT$150`, `NT$500`, `NT$1,500`) redirect via signed `TradeInfo` (AES-256-CBC) + `TradeSha` (SHA-256) form POST; `POST /api/billing/newebpay/notify` and `/return` are exempted from Cloudflare Access write auth in `src/worker.ts` and verified via `TradeSha` + `MerchantOrderNo` idempotency. An admin manual credit endpoint (`POST /api/admin/companies/{company_id}/credits`) enables immediate top-ups prior to merchant KYC approval.
+* **Forfeited Alternatives:**
+  * *Postpaid Monthly Invoicing:* Carrying uncollected Gemini token spend for unverified accounts risks runaway API bills; prepaid TWD packs + `402` cutoff bound liability cleanly.
+  * *Collecting Raw Card Inputs in Frontend:* Hosted NewebPay MPG redirect keeps PCI-DSS scope out of the Angular/FastAPI stack.

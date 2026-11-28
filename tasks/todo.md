@@ -82,9 +82,17 @@ See detailed design in [`tasks/plan.md`](plan.md).
 - [x] **Task 11.7 (`feat(rate-limit)`):** Add Cloudflare Workers `ratelimits` binding in `wrangler.jsonc` keyed by verified email on Gemini `POST` routes in `src/worker.ts`. *(S: `wrangler.jsonc`, `src/worker.ts`)*
 - [ ] **Checkpoint / PR #11:** Review & merge `develop` → `main` for Component 11.
 
+## Component 12: Company Billing Pool, 5 Free AI Calls & NewebPay Checkout
+
+- [x] **CL 12.1 (`feat(db-billing)`):** Add `company_billing_accounts` + extensible `usage_ledger` (`service_name`, `unit`, `quantity`, `metadata_json`), Alembic `004_billing_usage.py`, and NewebPay/billing settings (`models.py`, `config.py`, `session.py`, `pyproject.toml`).
+- [x] **CL 12.2 (`feat(billing-service)`):** Add Gemini token telemetry (`parser.py`, `copilot.py`) and `billing.py` (5-free-call grant, `token_cost × 1.5x` deduction, `admin_exempt` logging, NewebPay AES-256-CBC + `TradeSha` helpers, `test_billing.py`).
+- [x] **CL 12.3 (`feat(billing-api)`):** Wire `402` quota gate + usage recording into `routes_documents.py` & `routes_copilot.py`, add `routes_billing.py` (`/api/billing/summary`, `/checkout`, `/newebpay/notify`, `/newebpay/return`, `/api/admin/companies/{id}/credits`), and exempt NewebPay callbacks in `src/worker.ts`.
+- [x] **CL 12.4 (`feat(ui-billing)`):** Add top-bar quota chip, `BillingDialogComponent` (`MatDialog`, `MatCard`, `MatChips`, `MatProgressBar`, `responsive-table`, NewebPay MPG form submit), `402` auto-open, and `payment=pending` polling (`compliance.models.ts`, `compliance-api.service.ts`, `app.component.*`).
+- [ ] **Checkpoint / PR #12:** Review & merge `develop` → `main` for Component 12.
+
 ## Future Enhancements (Post-MVP)
 
 - [x] **APHIA Announcements & Chemical Assessments:** Add separate lookup/sync for `pesticide.aphia.gov.tw` official announcements (`農藥公告`), banned/restricted/carcinogen lists, and ACRI chemical risk assessments (not exposed in `EIR027`).
 - [ ] **Email / Gmail Webhook Ingestion:** Accept emails with attachments from allowlisted users (e.g. Zero Trust / owner allowlist via Gmail Pub/Sub webhook or Cloudflare Email Routing), auto-classify document type (`label` / `loa` / `msds`), parse, and store into R2 + Neon Postgres.
-- [ ] **Multi-Tenant Storage Isolation & Per-User Rate Limiting:** Partition R2 object prefixes (`orgs/{org_id}/...`) and Postgres rows by user/organization using verified Zero Trust identity (`Cf-Access-Authenticated-User-Email` / JWT), and enforce per-user Gemini `POST` rate limits in `src/worker.ts` via Cloudflare Workers `ratelimits` binding (or Durable Object/DB quota).
+- [x] **Multi-Tenant Storage Isolation & Per-User Rate Limiting:** Partition R2 object prefixes (`orgs/{org_id}/...`) and Postgres rows by user/organization using verified Zero Trust identity (`Cf-Access-Authenticated-User-Email` / JWT), and enforce per-user Gemini `POST` rate limits in `src/worker.ts` via Cloudflare Workers `ratelimits` binding (or Durable Object/DB quota).
 - [ ] **Baseline File Archive & Download by `reg_no` with TTL Cleanup:** Persist original uploaded files in R2, expose download endpoints for baseline files per `reg_no`, and automatically expire non-baseline / non-latest files via R2 Lifecycle Rules or scheduled cleanup.

@@ -31,6 +31,8 @@ export interface UploadFormEntry {
   statusMessage?: string;
 }
 
+export type UploadDialogResult = DocumentUploadResponse[] | { quotaExceeded: true } | null;
+
 @Component({
   selector: 'app-reparse-confirm-dialog',
   imports: [MatDialogModule, MatButtonModule],
@@ -69,7 +71,7 @@ export class UploadDialogComponent {
   private readonly destroyRef = inject(DestroyRef);
   private readonly dialog = inject(MatDialog);
   private readonly dialogRef = inject(
-    MatDialogRef<UploadDialogComponent, DocumentUploadResponse[] | null>,
+    MatDialogRef<UploadDialogComponent, UploadDialogResult>,
   );
   readonly data = inject<UploadDialogData>(MAT_DIALOG_DATA);
 
@@ -216,6 +218,12 @@ export class UploadDialogComponent {
           statusMessage: `完成 (${res.doc_id}, ${res.model_used})`,
         });
       } catch (err) {
+        if ((err as { status?: number })?.status === 402) {
+          this.uploading.set(false);
+          this.dialogRef.disableClose = false;
+          this.dialogRef.close({ quotaExceeded: true });
+          return;
+        }
         hasError = true;
         this.patchEntry(entry.id, {
           status: 'error',

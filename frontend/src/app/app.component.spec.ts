@@ -21,6 +21,21 @@ describe('AppComponent', () => {
   });
 
   afterEach(() => {
+    for (const req of httpMock.match('/api/billing/summary')) {
+      if (!req.cancelled) {
+        req.flush({
+          company_id: 'default',
+          free_calls_remaining: 5,
+          free_calls_limit: 5,
+          credit_balance_usd: 0,
+          billing_exempt: true,
+          billing_mode: 'free_tier',
+          packs: [],
+          usage_by_user: [],
+          recent_events: [],
+        });
+      }
+    }
     httpMock.verify();
   });
 
@@ -40,6 +55,20 @@ describe('AppComponent', () => {
     flushInitMe();
     expect(component.sidenavOpen()).toBeFalse();
     expect(component.regNo()).toBe('');
+
+    const billingReq = httpMock.expectOne('/api/billing/summary');
+    billingReq.flush({
+      company_id: 'default',
+      free_calls_remaining: 5,
+      free_calls_limit: 5,
+      credit_balance_usd: 0,
+      billing_exempt: true,
+      billing_mode: 'free_tier',
+      packs: [],
+      usage_by_user: [],
+      recent_events: [],
+    });
+    expect(component.billingSummary()?.billing_exempt).toBeTrue();
 
     const docReq = httpMock.expectOne('/api/documents?limit=50');
     expect(docReq.request.method).toBe('GET');

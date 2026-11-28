@@ -76,6 +76,17 @@
     >
       試用範例
     </button>
+    @if (billingSummary(); as bs) {
+      <button mat-stroked-button type="button" (click)="openBillingDialog()">
+        @if (bs.billing_exempt) {
+          帳務 (Admin)
+        } @else if (bs.free_calls_remaining > 0) {
+          免費 {{ bs.free_calls_remaining }}/{{ bs.free_calls_limit }}
+        } @else {
+          餘額 ${{ bs.credit_balance_usd.toFixed(2) }}
+        }
+      </button>
+    }
     @if (me(); as userInfo) {
       @if (userInfo.authenticated && !userInfo.company_id) {
         <button
@@ -99,6 +110,18 @@
     </button>
   </div>
 </mat-toolbar>
+
+@if (sessionExpired()) {
+  <div class="public-demo-banner" role="alert">
+    <span>
+      <strong>登入工作階段已過期：</strong>
+      Cloudflare Access 驗證已逾時，請重新驗證以載入頁面影像並恢復公司權限。
+    </span>
+    <button mat-flat-button color="primary" type="button" (click)="reauthenticateSession()">
+      重新驗證登入
+    </button>
+  </div>
+}
 
 @if (isPublicDemoMode()) {
   <div class="public-demo-banner" role="alert">
@@ -420,6 +443,7 @@
           [docLabelsById]="docLabelsById()"
           (pageChange)="viewerPage.set($event)"
           (openFullCitation)="onOpenFullCitation($event)"
+          (reauthenticate)="reauthenticateSession($event)"
         />
       </div>
     </main>

@@ -1,0 +1,87 @@
+<h2 mat-dialog-title>
+  額度與帳務明細 <small lang="en">Billing &amp; Usage</small>
+</h2>
+
+<mat-dialog-content class="billing-content">
+  <p class="dialog-sub">以公司為單位計算 5 次免費 AI 解析/審查，之後依實際 Token 成本扣抵儲值池。</p>
+
+  @if (summary(); as s) {
+    <section class="quota-cards">
+      <mat-card appearance="outlined" class="quota-stat">
+        <span class="stat-label">免費試用剩餘</span>
+        <strong class="stat-value mono">
+          {{ s.billing_exempt ? '無限制 (Admin)' : (s.free_calls_remaining + ' / ' + s.free_calls_limit) }}
+        </strong>
+      </mat-card>
+      <mat-card appearance="outlined" class="quota-stat">
+        <span class="stat-label">公司儲值餘額</span>
+        <strong class="stat-value mono">${{ s.credit_balance_usd.toFixed(4) }} USD</strong>
+      </mat-card>
+    </section>
+
+    <section class="topup-section">
+      <div class="section-head">
+        <h3>藍新金流儲值（NewebPay MPG）</h3>
+        <mat-chip-set aria-label="計費模式">
+          <mat-chip>{{ s.billing_exempt ? 'Admin 免計費' : s.billing_mode }}</mat-chip>
+        </mat-chip-set>
+      </div>
+      @if (checkoutBusy() !== null) {
+        <mat-progress-bar mode="indeterminate" aria-label="建立結帳中"></mat-progress-bar>
+      }
+      <div class="pack-grid">
+        @for (pack of s.packs; track pack.pack_id) {
+          <button
+            mat-stroked-button
+            type="button"
+            class="pack-btn"
+            [disabled]="checkoutBusy() !== null"
+            (click)="startTopup(pack.pack_id)"
+          >
+            <strong>{{ pack.label }}</strong>
+            <span class="mono">≈ ${{ pack.estimated_usd.toFixed(2) }} USD</span>
+          </button>
+        }
+      </div>
+      @if (checkoutError(); as err) {
+        <p class="form-error" role="alert">{{ err }}</p>
+      }
+    </section>
+
+    <section class="ledger-section">
+      <div tabindex="0" role="region" aria-labelledby="usage-by-user-caption" class="table-wrapper">
+        <table>
+          <caption id="usage-by-user-caption">成員用量與費用分攤</caption>
+          <thead>
+            <tr>
+              <th scope="col">使用者 Email</th>
+              <th scope="col">呼叫次數</th>
+              <th scope="col">累計 Tokens</th>
+              <th scope="col">估算費用 (USD)</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (u of s.usage_by_user; track u.user_email) {
+              <tr>
+                <th scope="row" class="mono">{{ u.user_email }}</th>
+                <td class="mono">{{ u.calls }}</td>
+                <td class="mono">{{ u.total_tokens | number }}</td>
+                <td class="mono">${{ u.total_cost_usd.toFixed(4) }}</td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="4" class="empty-row">尚無 AI 使用紀錄。</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  } @else {
+    <mat-progress-bar mode="indeterminate" aria-label="載入帳務資訊中"></mat-progress-bar>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button type="button" (click)="close()">關閉</button>
+</mat-dialog-actions>
