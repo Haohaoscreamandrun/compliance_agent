@@ -283,10 +283,7 @@ def build_newebpay_checkout_form(
         )
 
     order_no = make_merchant_order_no(company_id)
-    comment = json.dumps(
-        {"cid": company_id, "email": user_email[:120], "pack": pack_id},
-        ensure_ascii=False,
-    )
+    comment = f"農藥標示合規審查系統 — {pack['label']}（付款完成後自動入帳至公司帳戶）"
     params = {
         "MerchantID": merchant_id,
         "RespondType": "JSON",
