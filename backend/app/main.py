@@ -11,6 +11,7 @@ import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.routes_billing import router as billing_router
 from app.api.routes_copilot import router as copilot_router
 from app.api.routes_documents import router as documents_router
 from app.api.routes_entity_aliases import router as entity_aliases_router
@@ -75,6 +76,7 @@ def create_app(
         allow_headers=["*"],
     )
     application.include_router(identity_router)
+    application.include_router(billing_router)
     application.include_router(registry_router)
     application.include_router(documents_router)
     application.include_router(copilot_router)

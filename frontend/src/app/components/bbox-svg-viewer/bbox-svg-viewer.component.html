@@ -109,7 +109,14 @@
   @if (imageUrl(); as src) {
     @if (imageError()) {
       <div class="empty-viewer" role="alert">
-        <p>無法載入頁面影像（第 {{ pageNumber() }} 頁）。請確認後端服務與文件儲存狀態。</p>
+        @if (imageAuthExpired()) {
+          <p>登入工作階段已過期，請重新驗證以載入頁面影像（第 {{ pageNumber() }} 頁）。</p>
+          <button type="button" mat-flat-button color="primary" (click)="reauthenticate.emit(false)">
+            重新驗證登入
+          </button>
+        } @else {
+          <p>無法載入頁面影像（第 {{ pageNumber() }} 頁）。請確認後端服務與文件儲存狀態。</p>
+        }
       </div>
     } @else {
       <div #scrollContainer class="viewer-scroll-container">

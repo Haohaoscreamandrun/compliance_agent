@@ -143,6 +143,7 @@ async def run_compliance_audit(
     reg_no: str,
     model_name: str = "gemini-3.8-flash",
     fallback_models: list[str] | None = None,
+    usage_out: dict[str, Any] | None = None,
 ) -> ComplianceAuditReport:
     """Execute Phase 1 tool-calling loop followed by Phase 2 Constrained Decoding."""
     canon_reg = normalize_reg_no(reg_no)
@@ -161,8 +162,15 @@ async def run_compliance_audit(
 
     called_tools: set[str] = set()
     completed_cleanly = False
+    prompt_tokens = 0
+    output_tokens = 0
+    total_tokens = 0
     for _ in range(MAX_PHASE1_TURNS):
         resp, _ = await _generate_with_5xx_fallback(client, candidate_models, contents, phase1_config)
+        usage = getattr(resp, "usage_metadata", None)
+        prompt_tokens += int(getattr(usage, "prompt_token_count", 0) or 0)
+        output_tokens += int(getattr(usage, "candidates_token_count", 0) or 0)
+        total_tokens += int(getattr(usage, "total_token_count", 0) or 0)
         fcalls = getattr(resp, "function_calls", None) or []
         if not fcalls:
             completed_cleanly = True
@@ -229,6 +237,19 @@ async def run_compliance_audit(
         [json.dumps(evidence_bundle, ensure_ascii=False)],
         phase2_config,
     )
+    usage2 = getattr(phase2_resp, "usage_metadata", None)
+    prompt_tokens += int(getattr(usage2, "prompt_token_count", 0) or 0)
+    output_tokens += int(getattr(usage2, "candidates_token_count", 0) or 0)
+    total_tokens += int(getattr(usage2, "total_token_count", 0) or 0)
+    if usage_out is not None:
+        usage_out.update(
+            {
+                "model_used": phase2_model,
+                "prompt_tokens": prompt_tokens,
+                "output_tokens": output_tokens,
+                "total_tokens": total_tokens,
+            }
+        )
     report = extract_response_json(phase2_resp, ComplianceAuditReport)
     assert isinstance(report, ComplianceAuditReport)
 

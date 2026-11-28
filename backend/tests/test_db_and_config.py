@@ -153,6 +153,8 @@ def test_postgresql_jsonb_ddl_and_cascade_constraints() -> None:
         "aphia_records",
         "aphia_query_cache",
         "chemical_evaluations",
+        "company_billing_accounts",
+        "usage_ledger",
     }
     assert set(Base.metadata.tables.keys()) == expected_tables
 
@@ -248,4 +250,4 @@ def test_company_tenancy_models_and_alembic_003() -> None:
     cfg = Config(str(REPO_ROOT / "backend" / "alembic.ini"))
     cfg.set_main_option("script_location", str(REPO_ROOT / "backend" / "alembic"))
     script = ScriptDirectory.from_config(cfg)
-    assert script.get_current_head() == "003_company_tenancy"
+    assert script.get_current_head() == "004_billing_usage"

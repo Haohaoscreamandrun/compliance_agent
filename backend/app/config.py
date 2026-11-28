@@ -76,6 +76,17 @@ class Settings(BaseSettings):
     backend_port: int = Field(default=8000, ge=1, le=65535)
     frontend_port: int = Field(default=4200, ge=1, le=65535)
     require_cf_access: bool = Field(default=False)
+    public_base_url: str = Field(default="")
+
+    # --- 5. Usage Metering & NewebPay (藍新金流) Billing ---
+    billing_free_calls_default: int = Field(default=5, ge=0)
+    billing_markup: float = Field(default=1.5, gt=0)
+    billing_usd_to_twd: float = Field(default=32.0, gt=0)
+    newebpay_merchant_id: str = Field(default="")
+    newebpay_hash_key: str = Field(default="")
+    newebpay_hash_iv: str = Field(default="")
+    newebpay_mpg_url: str = Field(default="https://ccore.newebpay.com/MPG/mpg_gateway")
+
     cors_allowed_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["http://localhost:4200", "http://127.0.0.1:4200"]
     )

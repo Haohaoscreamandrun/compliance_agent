@@ -5,6 +5,8 @@ import { Observable } from 'rxjs';
 import {
   AccessRequestOut,
   AphiaLookupResponse,
+  BillingSummaryResponse,
+  CheckoutResponse,
   ComplianceAuditReport,
   DocType,
   DocumentSummary,
@@ -38,6 +40,29 @@ export class ComplianceApiService {
 
   setWorkspaceCompanyId(workspace: ActiveWorkspaceId): void {
     this.workspaceCompanyId.set(workspace);
+  }
+
+  getAuthLoginUrl(
+    nextPath = typeof window !== 'undefined'
+      ? `${window.location.pathname}${window.location.search}`
+      : '/',
+  ): string {
+    const safeNext = nextPath.startsWith('/') && !nextPath.startsWith('//') ? nextPath : '/';
+    return `${this.baseUrl}/auth/login?next=${encodeURIComponent(safeNext)}`;
+  }
+
+  async probeAuthRedirect(url: string): Promise<boolean> {
+    if (typeof fetch === 'undefined') return false;
+    try {
+      const res = await fetch(url, {
+        method: 'GET',
+        redirect: 'manual',
+        credentials: 'include',
+      });
+      return res.type === 'opaqueredirect' || res.status === 401;
+    } catch {
+      return false;
+    }
   }
 
   private workspaceHeaders(): HttpHeaders | undefined {
@@ -209,12 +234,30 @@ export class ComplianceApiService {
       note: note?.trim() ? note.trim() : null,
     });
   }
+
+  getBillingSummary(): Observable<BillingSummaryResponse> {
+    return this.http.get<BillingSummaryResponse>(`${this.baseUrl}/billing/summary`, {
+      headers: this.workspaceHeaders(),
+    });
+  }
+
+  createBillingCheckout(packId: string): Observable<CheckoutResponse> {
+    return this.http.post<CheckoutResponse>(
+      `${this.baseUrl}/billing/checkout`,
+      { pack_id: packId },
+      { headers: this.workspaceHeaders() },
+    );
+  }
 }
 
 export function extractApiErrorMessage(err: unknown, fallback: string): string {
   const detail = (err as { error?: { detail?: unknown } } | null)?.error?.detail;
   if (typeof detail === 'string' && detail.trim()) {
     return detail;
+  }
+  if (typeof detail === 'object' && detail !== null && 'message' in detail) {
+    const msg = String((detail as { message: unknown }).message ?? '').trim();
+    if (msg) return msg;
   }
   if (Array.isArray(detail) && detail.length > 0) {
     const msgs = detail

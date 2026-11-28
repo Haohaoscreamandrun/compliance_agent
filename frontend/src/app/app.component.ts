@@ -27,6 +27,10 @@ import { MatToolbarModule } from '@angular/material/toolbar';
 import { catchError, forkJoin, of, Subscription, switchMap } from 'rxjs';
 
 import { BboxSvgViewerComponent } from './components/bbox-svg-viewer/bbox-svg-viewer.component';
+import {
+  BillingDialogComponent,
+  BillingDialogData,
+} from './components/billing-dialog/billing-dialog.component';
 import { CopilotAuditPanelComponent } from './components/copilot-audit-panel/copilot-audit-panel.component';
 import {
   EntityAliasDialogComponent,
@@ -39,10 +43,12 @@ import {
 import {
   UploadDialogComponent,
   UploadDialogData,
+  UploadDialogResult,
 } from './components/upload-dialog/upload-dialog.component';
 import {
   AccessRequestOut,
   AphiaLookupResponse,
+  BillingSummaryResponse,
   CitationRef,
   ComplianceAuditReport,
   DocType,
@@ -104,6 +110,8 @@ export class AppComponent implements OnInit {
   // Theme & Identity state
   readonly theme = signal<'light' | 'dark'>(this.readInitialTheme());
   readonly me = signal<MeResponse | null>(null);
+  readonly sessionExpired = signal(false);
+  private lastSessionCheckAt = Date.now();
   readonly activeWorkspace = computed(() => this.api.workspaceCompanyId());
   readonly isPublicDemoMode = computed(() => this.api.workspaceCompanyId() === 'public_demo');
   readonly canManagePublicDemo = computed(() => !!this.me()?.can_manage_public_demo);
@@ -122,6 +130,8 @@ export class AppComponent implements OnInit {
   readonly baselineDocs = signal<DocumentSummary[]>([]);
   readonly baselinesLoading = signal(false);
   readonly baselinesError = signal<string | null>(null);
+
+  readonly billingSummary = signal<BillingSummaryResponse | null>(null);
 
   // Audit Panel state (appears when audit runs)
   readonly auditReport = signal<ComplianceAuditReport | null>(null);
@@ -168,6 +178,56 @@ export class AppComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadMe();
+    this.checkPendingPaymentReturn();
+    this.registerSessionFreshnessCheck();
+  }
+
+  reauthenticateSession(auto = false): void {
+    if (typeof window === 'undefined') return;
+    if (auto && typeof sessionStorage !== 'undefined') {
+      if (sessionStorage.getItem('compliance_reauth_attempted') === '1') {
+        this.sessionExpired.set(true);
+        return;
+      }
+      sessionStorage.setItem('compliance_reauth_attempted', '1');
+    } else if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem('compliance_reauth_attempted');
+    }
+    window.location.assign(this.api.getAuthLoginUrl());
+  }
+
+  private registerSessionFreshnessCheck(): void {
+    if (typeof document === 'undefined' || typeof window === 'undefined') return;
+    const onReturnToPage = () => {
+      if (document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - this.lastSessionCheckAt < 5 * 60 * 1000) return;
+      this.lastSessionCheckAt = now;
+      void this.checkSessionFreshness();
+    };
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      this.lastSessionCheckAt = Date.now();
+      void this.checkSessionFreshness();
+    };
+    document.addEventListener('visibilitychange', onReturnToPage);
+    window.addEventListener('pageshow', onPageShow);
+    this.destroyRef.onDestroy(() => {
+      document.removeEventListener('visibilitychange', onReturnToPage);
+      window.removeEventListener('pageshow', onPageShow);
+    });
+  }
+
+  private async checkSessionFreshness(): Promise<void> {
+    const expired = await this.api.probeAuthRedirect('/api/me');
+    if (expired) {
+      this.reauthenticateSession(true);
+      return;
+    }
+    if (this.sessionExpired()) {
+      this.sessionExpired.set(false);
+      this.loadMe();
+    }
   }
 
   loadMe(): void {
@@ -176,14 +236,24 @@ export class AppComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (info) => {
+          this.sessionExpired.set(false);
+          if (info.authenticated && typeof sessionStorage !== 'undefined') {
+            sessionStorage.removeItem('compliance_reauth_attempted');
+          }
           this.me.set(info);
           this.loadDocuments();
           if (info.company_id) {
             this.loadEntityAliases();
+            this.loadBillingSummary();
           }
         },
-        error: () => {
+        error: (err) => {
           this.me.set(null);
+          if (err?.status === 0 || err?.status === 401) {
+            void this.api.probeAuthRedirect('/api/me').then((expired) => {
+              if (expired) this.reauthenticateSession(true);
+            });
+          }
         },
       });
   }
@@ -343,6 +413,7 @@ export class AppComponent implements OnInit {
           this.auditLoading.set(false);
           if (!isReadOnlyPublicDemo) {
             this.loadDocuments();
+            this.loadBillingSummary();
             this.promptUnconfirmedBilingualEntity(report);
           }
         },
@@ -351,6 +422,9 @@ export class AppComponent implements OnInit {
             extractApiErrorMessage(err, '合規審查失敗，請確認後端服務與 Gemini 金鑰。'),
           );
           this.auditLoading.set(false);
+          if ((err as { status?: number } | null)?.status === 402) {
+            this.openBillingDialog();
+          }
         },
       });
   }
@@ -419,7 +493,7 @@ export class AppComponent implements OnInit {
     const ref = this.dialog.open<
       UploadDialogComponent,
       UploadDialogData,
-      DocumentUploadResponse[] | null
+      UploadDialogResult
     >(UploadDialogComponent, {
       data: { defaultRegNo: this.regNo() },
       width: 'min(1160px, 94vw)',
@@ -430,12 +504,21 @@ export class AppComponent implements OnInit {
     ref
       .afterClosed()
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((results) => {
+      .subscribe((result) => {
+        if (result && !Array.isArray(result) && result.quotaExceeded) {
+          this.snackBar.open('免費 AI 額度與儲值餘額已用罄，請先儲值後再試。', '關閉', {
+            duration: 6000,
+          });
+          this.openBillingDialog();
+          return;
+        }
+        const results = Array.isArray(result) ? result : null;
         if (!results || results.length === 0) return;
         this.loadDocuments();
         if (this.baselinesLoaded()) {
           this.loadBaselines();
         }
+        this.loadBillingSummary();
         const latest = results[results.length - 1];
         this.previewDocument(latest);
         const msg =
@@ -456,6 +539,51 @@ export class AppComponent implements OnInit {
           // Non-fatal on initial load
         },
       });
+  }
+
+  loadBillingSummary(): void {
+    this.api
+      .getBillingSummary()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (summary) => this.billingSummary.set(summary),
+        error: () => {
+          // Non-fatal when unauthenticated or un-allowlisted
+        },
+      });
+  }
+
+  openBillingDialog(): void {
+    const ref = this.dialog.open<BillingDialogComponent, BillingDialogData, void>(
+      BillingDialogComponent,
+      {
+        data: { summary: this.billingSummary() },
+        width: 'min(720px, 94vw)',
+        maxWidth: '94vw',
+      },
+    );
+    ref
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.loadBillingSummary());
+  }
+
+  private checkPendingPaymentReturn(): void {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('payment') !== 'pending') return;
+    let attempts = 0;
+    const timer = globalThis.setInterval(() => {
+      attempts += 1;
+      this.loadBillingSummary();
+      if (attempts >= 7) {
+        globalThis.clearInterval(timer);
+        const url = new URL(window.location.href);
+        url.searchParams.delete('payment');
+        window.history.replaceState({}, '', url.toString());
+      }
+    }, 2000);
+    this.destroyRef.onDestroy(() => globalThis.clearInterval(timer));
   }
 
   private promptUnconfirmedBilingualEntity(

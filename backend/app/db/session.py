@@ -64,6 +64,13 @@ async def init_db_schema(engine: AsyncEngine) -> None:
                     "ON CONFLICT (company_id) DO NOTHING"
                 )
             )
+            await conn.execute(
+                text(
+                    "INSERT INTO company_billing_accounts (company_id, free_calls_remaining, credit_balance_micros, billing_exempt, billing_mode, updated_at) "
+                    "SELECT company_id, 5, 0, false, 'free_tier', NOW() FROM companies "
+                    "ON CONFLICT (company_id) DO NOTHING"
+                )
+            )
             await conn.execute(text("DROP INDEX IF EXISTS uq_documents_active_baseline"))
             await conn.execute(
                 text(

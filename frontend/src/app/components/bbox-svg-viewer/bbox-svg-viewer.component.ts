@@ -25,10 +25,12 @@ export class BboxSvgViewerComponent {
   readonly scrollContainer = viewChild<ElementRef<HTMLElement>>('scrollContainer');
   readonly pageChange = output<number>();
   readonly openFullCitation = output<CitationRef>();
+  readonly reauthenticate = output<boolean>();
 
   readonly naturalWidth = signal(1132);
   readonly naturalHeight = signal(1600);
   readonly imageError = signal(false);
+  readonly imageAuthExpired = signal(false);
   readonly dimsByUrl = signal<Record<string, { w: number; h: number }>>({});
 
   // Zoom (0.5x to 4.0x) and hover Magnifier Loupe state
@@ -51,6 +53,7 @@ export class BboxSvgViewerComponent {
     effect(() => {
       this.imageUrl();
       this.imageError.set(false);
+      this.imageAuthExpired.set(false);
       this.loupeVisible.set(false);
     });
     effect(() => {
@@ -158,6 +161,14 @@ export class BboxSvgViewerComponent {
 
   onImageError(): void {
     this.imageError.set(true);
+    const url = this.imageUrl();
+    if (!url) return;
+    void this.api.probeAuthRedirect(url).then((expired) => {
+      if (expired && this.imageUrl() === url && this.imageError()) {
+        this.imageAuthExpired.set(true);
+        this.reauthenticate.emit(true);
+      }
+    });
   }
 
   zoomIn(): void {

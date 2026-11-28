@@ -15,6 +15,11 @@ export interface Env {
   REQUIRE_CF_ACCESS?: string;
   CF_ACCESS_TEAM_DOMAIN?: string;
   CF_ACCESS_AUD?: string;
+  PUBLIC_BASE_URL?: string;
+  NEWEBPAY_MERCHANT_ID?: string;
+  NEWEBPAY_HASH_KEY?: string;
+  NEWEBPAY_HASH_IV?: string;
+  NEWEBPAY_MPG_URL?: string;
   GEMINI_API_KEY?: string;
   GEMINI_RATE_LIMITER?: RateLimit;
   DATABASE_URL?: string;
@@ -55,6 +60,11 @@ export class ComplianceBackend extends Container<Env> {
       R2_BUCKET: env.R2_BUCKET ?? '',
       R2_ACCESS_KEY_ID: env.R2_ACCESS_KEY_ID ?? '',
       R2_SECRET_ACCESS_KEY: env.R2_SECRET_ACCESS_KEY ?? '',
+      PUBLIC_BASE_URL: env.PUBLIC_BASE_URL ?? '',
+      NEWEBPAY_MERCHANT_ID: env.NEWEBPAY_MERCHANT_ID ?? '',
+      NEWEBPAY_HASH_KEY: env.NEWEBPAY_HASH_KEY ?? '',
+      NEWEBPAY_HASH_IV: env.NEWEBPAY_HASH_IV ?? '',
+      NEWEBPAY_MPG_URL: env.NEWEBPAY_MPG_URL ?? 'https://ccore.newebpay.com/MPG/mpg_gateway',
     };
   }
 }
@@ -88,6 +98,11 @@ async function resolveVerifiedIdentity(
   }
   return verifyCloudflareAccessJwt(jwt, teamDomain, env.CF_ACCESS_AUD);
 }
+
+const PUBLIC_WEBHOOK_PATHS = new Set([
+  '/api/billing/newebpay/notify',
+  '/api/billing/newebpay/return',
+]);
 
 async function isAuthorizedWrite(
   request: Request,
@@ -130,8 +145,13 @@ export default {
     const method = request.method.toUpperCase();
 
     if (url.pathname.startsWith('/api/')) {
-      const verifiedIdentity = await resolveVerifiedIdentity(request, env);
-      if (!SAFE_READ_METHODS.has(method) && !(await isAuthorizedWrite(request, env, verifiedIdentity))) {
+      const isPublicWebhook = method === 'POST' && PUBLIC_WEBHOOK_PATHS.has(url.pathname);
+      const verifiedIdentity = isPublicWebhook ? null : await resolveVerifiedIdentity(request, env);
+      if (
+        !isPublicWebhook &&
+        !SAFE_READ_METHODS.has(method) &&
+        !(await isAuthorizedWrite(request, env, verifiedIdentity))
+      ) {
         return withSecurityHeaders(
           Response.json(
             { detail: 'Write access requires authentication (X-Write-Token or Zero Trust Access).' },

@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -376,4 +377,54 @@ class ChemicalEvaluation(Base):
     notes: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utc_now, onupdate=_utc_now
+    )
+
+
+class CompanyBillingAccount(Base):
+    """Per-company prepaid credit pool and free-call quota."""
+
+    __tablename__ = "company_billing_accounts"
+    __table_args__ = (
+        CheckConstraint("free_calls_remaining >= 0", name="ck_billing_free_calls_nonneg"),
+        CheckConstraint("credit_balance_micros >= 0", name="ck_billing_credit_nonneg"),
+    )
+
+    company_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("companies.company_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    free_calls_remaining: Mapped[int] = mapped_column(Integer, nullable=False, default=5, server_default="5")
+    credit_balance_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
+    billing_exempt: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
+    billing_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="free_tier", server_default="free_tier")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utc_now, onupdate=_utc_now
+    )
+
+
+class UsageLedger(Base):
+    """Immutable multi-service usage and credit top-up ledger keyed by company and user email."""
+
+    __tablename__ = "usage_ledger"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    company_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("companies.company_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_email: Mapped[str] = mapped_column(String(256), nullable=False, index=True)
+    service_name: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    unit: Mapped[str] = mapped_column(String(32), nullable=False)
+    quantity: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    reg_no: Mapped[str | None] = mapped_column(String(32), index=True)
+    doc_id: Mapped[str | None] = mapped_column(String(64))
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    cost_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    charge_source: Mapped[str] = mapped_column(String(32), nullable=False)
+    external_order_id: Mapped[str | None] = mapped_column(String(128), unique=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utc_now, index=True
     )
