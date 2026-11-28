@@ -25,6 +25,11 @@ from app.api.deps import (
     get_verified_email,
 )
 from app.config import Settings
+from app.services.billing import (
+    calculate_cost_micros,
+    ensure_quota_available,
+    record_successful_usage,
+)
 from app.db.models import (
     PUBLIC_DEMO_COMPANY_ID,
     PUBLIC_DEMO_REG_NO,
@@ -200,6 +205,13 @@ async def upload_document(
                 extracted_data=cached_doc.extracted_data,
             )
 
+    await ensure_quota_available(
+        session,
+        company_id=user.company_id,
+        role=user.role,
+        default_free_calls=settings.billing_free_calls_default,
+    )
+
     doc_id = f"{doc_type}_{uuid4().hex[:12]}"
     raw_name = (file.filename or f"{doc_id}.bin").replace("\\", "/")
     filename = Path(raw_name).name or f"{doc_id}.bin"
@@ -369,6 +381,33 @@ async def upload_document(
                 extraction=parse_res.extraction,
             ):
                 session.add(DocumentClause(**clause_dict))
+
+            cost_micros = calculate_cost_micros(
+                parse_res.model_used,
+                parse_res.prompt_tokens,
+                parse_res.output_tokens,
+                markup=settings.billing_markup,
+            )
+            await record_successful_usage(
+                session,
+                company_id=user.company_id,
+                user_email=user.email,
+                is_admin=(user.role == "admin"),
+                service_name="gemini_parse",
+                unit="tokens",
+                quantity=parse_res.total_tokens,
+                cost_micros=cost_micros,
+                reg_no=resolved_reg,
+                doc_id=doc_id,
+                metadata_json={
+                    "model_used": parse_res.model_used,
+                    "prompt_tokens": parse_res.prompt_tokens,
+                    "output_tokens": parse_res.output_tokens,
+                    "doc_type": doc_type,
+                    "page_count": len(pages),
+                },
+                default_free_calls=settings.billing_free_calls_default,
+            )
 
             await session.commit()
             await session.refresh(doc_row)

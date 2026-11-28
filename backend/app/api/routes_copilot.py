@@ -33,6 +33,11 @@ from app.db.models import (
 from app.db.session import get_db_session
 from app.schemas.report import ComplianceAuditReport
 from app.services.aphia_client import extract_ingredient_tokens, lookup_aphia_for_tokens
+from app.services.billing import (
+    calculate_cost_micros,
+    ensure_quota_available,
+    record_successful_usage,
+)
 from app.services.cascade_diff import validate_reg_no
 from app.services.copilot import run_compliance_audit
 from app.services.parser import GeminiParseError
@@ -188,6 +193,13 @@ async def audit_permit(
         raise HTTPException(status_code=503, detail="Gemini client is not configured.")
 
     settings: Settings = request.app.state.settings
+    await ensure_quota_available(
+        session,
+        company_id=user.company_id,
+        role=user.role,
+        default_free_calls=settings.billing_free_calls_default,
+    )
+
     http: httpx.AsyncClient = request.app.state.http_client
     toolset = CopilotToolset(
         session=session,
@@ -197,6 +209,7 @@ async def audit_permit(
         company_id=user.company_id,
     )
 
+    audit_usage: dict[str, int | str] = {}
     try:
         report = await run_compliance_audit(
             client=client,
@@ -204,6 +217,7 @@ async def audit_permit(
             reg_no=canon_reg,
             model_name=settings.gemini_copilot_model,
             fallback_models=settings.gemini_parse_fallback_models,
+            usage_out=audit_usage,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -243,5 +257,32 @@ async def audit_permit(
         )
     )
     await session.execute(upsert_stmt)
+    model_used = str(audit_usage.get("model_used") or settings.gemini_copilot_model)
+    p_tok = int(audit_usage.get("prompt_tokens") or 0)
+    o_tok = int(audit_usage.get("output_tokens") or 0)
+    t_tok = int(audit_usage.get("total_tokens") or 0)
+    cost_micros = calculate_cost_micros(
+        model_used,
+        p_tok,
+        o_tok,
+        markup=settings.billing_markup,
+    )
+    await record_successful_usage(
+        session,
+        company_id=user.company_id,
+        user_email=user.email,
+        is_admin=(user.role == "admin"),
+        service_name="gemini_audit",
+        unit="tokens",
+        quantity=t_tok,
+        cost_micros=cost_micros,
+        reg_no=canon_reg,
+        metadata_json={
+            "model_used": model_used,
+            "prompt_tokens": p_tok,
+            "output_tokens": o_tok,
+        },
+        default_free_calls=settings.billing_free_calls_default,
+    )
     await session.commit()
     return report
