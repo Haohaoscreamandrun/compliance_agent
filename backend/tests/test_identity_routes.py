@@ -137,3 +137,7 @@ async def test_auth_login_redirect_safety(tmp_path: Path) -> None:
         r_evil = await client.get("/api/auth/login?next=//evil.example/phish")
         assert r_evil.status_code == 302
         assert r_evil.headers["location"] == "/"
+
+        r_backslash = await client.get("/api/auth/login?next=/%5Cevil.example/phish")
+        assert r_backslash.status_code == 302
+        assert r_backslash.headers["location"] == "/"

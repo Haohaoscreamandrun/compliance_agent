@@ -76,7 +76,11 @@ async def auth_login_redirect(
     next: str = Query(default="/", max_length=512),
 ) -> RedirectResponse:
     """Top-level navigation target so Cloudflare Access can issue/renew CF_Authorization and return to the SPA."""
-    safe_next = next if (next.startswith("/") and not next.startswith("//")) else "/"
+    safe_next = (
+        next
+        if (next.startswith("/") and not next.startswith("//") and not next.startswith("/\\"))
+        else "/"
+    )
     return RedirectResponse(url=safe_next, status_code=302)
 
 

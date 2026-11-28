@@ -208,7 +208,7 @@ async def newebpay_notify_webhook(
     result = payload.get("Result") or {}
     merchant_id = str(result.get("MerchantID") or "").strip()
     expected_merchant_id = settings.newebpay_merchant_id.strip()
-    if merchant_id and expected_merchant_id and merchant_id != expected_merchant_id:
+    if expected_merchant_id and merchant_id != expected_merchant_id:
         raise HTTPException(status_code=400, detail="MerchantID mismatch.")
 
     order_no = str(result.get("MerchantOrderNo") or "").strip()
